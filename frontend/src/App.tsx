@@ -1,121 +1,99 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect } from 'react'
+
 import './App.css'
+import { EventsPanel } from './components/EventsPanel'
+import { SummaryGrid } from './components/SummaryGrid'
+import { UploadPanel } from './components/UploadPanel'
+import { UploadsPanel } from './components/UploadsPanel'
+import { PAGE_SIZE, useLogAnalyzerStore } from './store/useLogAnalyzerStore'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const uploads = useLogAnalyzerStore((state) => state.uploads)
+  const selectedUploadId = useLogAnalyzerStore((state) => state.selectedUploadId)
+  const eventsResponse = useLogAnalyzerStore((state) => state.eventsResponse)
+  const selectedFile = useLogAnalyzerStore((state) => state.selectedFile)
+  const isLoadingUploads = useLogAnalyzerStore((state) => state.isLoadingUploads)
+  const isLoadingEvents = useLogAnalyzerStore((state) => state.isLoadingEvents)
+  const isUploading = useLogAnalyzerStore((state) => state.isUploading)
+  const uploadError = useLogAnalyzerStore((state) => state.uploadError)
+  const eventsError = useLogAnalyzerStore((state) => state.eventsError)
+  const offset = useLogAnalyzerStore((state) => state.offset)
+  const setSelectedFile = useLogAnalyzerStore((state) => state.setSelectedFile)
+  const setSelectedUploadId = useLogAnalyzerStore((state) => state.setSelectedUploadId)
+  const setOffset = useLogAnalyzerStore((state) => state.setOffset)
+  const refreshUploads = useLogAnalyzerStore((state) => state.refreshUploads)
+  const loadEvents = useLogAnalyzerStore((state) => state.loadEvents)
+  const uploadFile = useLogAnalyzerStore((state) => state.uploadFile)
+
+  useEffect(() => {
+    void refreshUploads()
+  }, [refreshUploads])
+
+  useEffect(() => {
+    if (!selectedUploadId) {
+      return
+    }
+    void loadEvents(selectedUploadId, offset)
+  }, [loadEvents, offset, selectedUploadId])
+
+  function handleUpload() {
+    void uploadFile()
+  }
+
+  const selectedUpload = uploads.find((upload) => upload.id === selectedUploadId) ?? eventsResponse?.upload ?? null
+  const totalPages = eventsResponse ? Math.max(1, Math.ceil(eventsResponse.pagination.total / PAGE_SIZE)) : 1
+  const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <div className="app-shell">
+      <header className="topbar">
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
+          <p className="eyebrow">SOC Analyst Workspace</p>
+          <h1>Proxy Log Intake</h1>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks">{count}</div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+        <div className="system-status">
+          <span className="status-dot" />
+          <span>Backend ready</span>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      </header>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <main className="layout">
+        <section className="left-column">
+          <UploadPanel
+            selectedFile={selectedFile}
+            isUploading={isUploading}
+            uploadError={uploadError}
+            onFileChange={setSelectedFile}
+            onUpload={handleUpload}
+          />
+          <UploadsPanel
+            uploads={uploads}
+            selectedUploadId={selectedUploadId}
+            isLoadingUploads={isLoadingUploads}
+            onRefresh={() => void refreshUploads()}
+            onSelectUpload={(uploadId) => {
+              setSelectedUploadId(uploadId)
+              setOffset(0)
+            }}
+          />
+        </section>
+
+        <section className="right-column">
+          <SummaryGrid selectedUpload={selectedUpload} />
+          <EventsPanel
+            eventsResponse={eventsResponse}
+            eventsError={eventsError}
+            isLoadingEvents={isLoadingEvents}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            offset={offset}
+            pageSize={PAGE_SIZE}
+            onPrevPage={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+            onNextPage={() => setOffset(offset + PAGE_SIZE)}
+          />
+        </section>
+      </main>
+    </div>
   )
 }
 
