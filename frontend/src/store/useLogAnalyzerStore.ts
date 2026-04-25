@@ -1,11 +1,22 @@
 import { create } from 'zustand'
 
-import type { EventsResponse, Upload } from '../types'
+import type { AuthUser, EventsResponse, Upload, UploadsResponse, UserRecord } from '../types'
 
-const PAGE_SIZE = 25
+const EVENT_PAGE_SIZE = 25
+const UPLOAD_PAGE_SIZE = 12
+
+type ActiveView = 'workspace' | 'admin'
 
 type LogAnalyzerState = {
+  currentUser: AuthUser | null
+  isCheckingAuth: boolean
+  isSubmittingAuth: boolean
+  activeView: ActiveView
   uploads: Upload[]
+  uploadsTotal: number
+  uploadListOffset: number
+  uploadOwnerFilter: string | null
+  userSearch: string
   selectedUploadId: string | null
   eventsResponse: EventsResponse | null
   selectedFile: File | null
@@ -14,17 +25,43 @@ type LogAnalyzerState = {
   isUploading: boolean
   uploadError: string | null
   eventsError: string | null
-  offset: number
+  authError: string | null
+  eventOffset: number
+  username: string
+  password: string
+  users: UserRecord[]
+  usersError: string | null
+  isLoadingUsers: boolean
+  setUsername: (username: string) => void
+  setPassword: (password: string) => void
   setSelectedFile: (file: File | null) => void
   setSelectedUploadId: (uploadId: string | null) => void
-  setOffset: (offset: number) => void
+  setEventOffset: (offset: number) => void
+  setUploadListOffset: (offset: number) => void
+  setActiveView: (view: ActiveView) => void
+  setUploadOwnerFilter: (userId: string | null) => void
+  setUserSearch: (value: string) => void
+  bootstrapAuth: () => Promise<void>
+  login: () => Promise<void>
+  register: () => Promise<void>
+  logout: () => Promise<void>
+  loadUsers: () => Promise<void>
+  updateUserAdmin: (userId: string, isAdmin: boolean) => Promise<void>
   refreshUploads: (preferredUploadId?: string | null) => Promise<void>
   loadEvents: (uploadId: string, nextOffset: number) => Promise<void>
   uploadFile: () => Promise<void>
 }
 
 export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
+  currentUser: null,
+  isCheckingAuth: true,
+  isSubmittingAuth: false,
+  activeView: 'workspace',
   uploads: [],
+  uploadsTotal: 0,
+  uploadListOffset: 0,
+  uploadOwnerFilter: null,
+  userSearch: '',
   selectedUploadId: null,
   eventsResponse: null,
   selectedFile: null,
@@ -33,16 +70,192 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
   isUploading: false,
   uploadError: null,
   eventsError: null,
-  offset: 0,
+  authError: null,
+  eventOffset: 0,
+  username: '',
+  password: '',
+  users: [],
+  usersError: null,
+  isLoadingUsers: false,
+  setUsername: (username) => set({ username }),
+  setPassword: (password) => set({ password }),
   setSelectedFile: (file) => set({ selectedFile: file }),
   setSelectedUploadId: (uploadId) => set({ selectedUploadId: uploadId }),
-  setOffset: (offset) => set({ offset }),
+  setEventOffset: (eventOffset) => set({ eventOffset }),
+  setUploadListOffset: (uploadListOffset) => set({ uploadListOffset }),
+  setActiveView: (activeView) => set({ activeView }),
+  setUploadOwnerFilter: (uploadOwnerFilter) => set({ uploadOwnerFilter, uploadListOffset: 0 }),
+  setUserSearch: (userSearch) => set({ userSearch }),
+  bootstrapAuth: async () => {
+    set({ isCheckingAuth: true, authError: null })
+    try {
+      const response = await fetch('/api/auth/me')
+      const payload = (await response.json()) as { user: AuthUser | null }
+      if (!response.ok) {
+        throw new Error('Failed to check session')
+      }
+      set({ currentUser: payload.user })
+      if (payload.user?.isAdmin) {
+        await get().loadUsers()
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to check session'
+      set({ authError: message, currentUser: null })
+    } finally {
+      set({ isCheckingAuth: false })
+    }
+  },
+  login: async () => {
+    const { username, password } = get()
+    set({ authError: null, isSubmittingAuth: true })
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      const payload = (await response.json()) as { user?: AuthUser; error?: string }
+      if (!response.ok || !payload.user) {
+        throw new Error(payload.error ?? 'Login failed')
+      }
+      set({
+        currentUser: payload.user,
+        username: '',
+        password: '',
+        authError: null,
+        selectedUploadId: null,
+        eventsResponse: null,
+        uploadListOffset: 0,
+        eventOffset: 0,
+        activeView: 'workspace',
+        uploadOwnerFilter: null,
+      })
+      if (payload.user.isAdmin) {
+        await get().loadUsers()
+      }
+      await get().refreshUploads()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Login failed'
+      set({ authError: message, currentUser: null })
+    } finally {
+      set({ isSubmittingAuth: false })
+    }
+  },
+  register: async () => {
+    const { username, password } = get()
+    set({ authError: null, isSubmittingAuth: true })
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      const payload = (await response.json()) as { user?: AuthUser; error?: string }
+      if (!response.ok || !payload.user) {
+        throw new Error(payload.error ?? 'Registration failed')
+      }
+      set({
+        currentUser: payload.user,
+        username: '',
+        password: '',
+        authError: null,
+        uploads: [],
+        selectedUploadId: null,
+        eventsResponse: null,
+        uploadListOffset: 0,
+        eventOffset: 0,
+        activeView: 'workspace',
+        uploadOwnerFilter: null,
+      })
+      if (payload.user.isAdmin) {
+        await get().loadUsers()
+      }
+      await get().refreshUploads()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Registration failed'
+      set({ authError: message, currentUser: null })
+    } finally {
+      set({ isSubmittingAuth: false })
+    }
+  },
+  logout: async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    set({
+      currentUser: null,
+      activeView: 'workspace',
+      uploads: [],
+      uploadsTotal: 0,
+      uploadListOffset: 0,
+      uploadOwnerFilter: null,
+      userSearch: '',
+      selectedUploadId: null,
+      eventsResponse: null,
+      selectedFile: null,
+      uploadError: null,
+      eventsError: null,
+      users: [],
+      usersError: null,
+      eventOffset: 0,
+    })
+  },
+  loadUsers: async () => {
+    set({ isLoadingUsers: true, usersError: null })
+    try {
+      const response = await fetch('/api/users')
+      const payload = (await response.json()) as { users: UserRecord[] }
+      if (!response.ok) {
+        throw new Error('Failed to load users')
+      }
+      set({ users: payload.users })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load users'
+      set({ usersError: message })
+    } finally {
+      set({ isLoadingUsers: false })
+    }
+  },
+  updateUserAdmin: async (userId, isAdmin) => {
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isAdmin }),
+      })
+      const payload = (await response.json()) as { user?: UserRecord; error?: string }
+      if (!response.ok || !payload.user) {
+        throw new Error(payload.error ?? 'Failed to update user')
+      }
+      const updatedUser = payload.user
+      set((state) => ({
+        users: state.users.map((user) => (user.id === updatedUser.id ? updatedUser : user)),
+        currentUser: state.currentUser?.id === updatedUser.id ? updatedUser : state.currentUser,
+      }))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update user'
+      set({ usersError: message })
+    }
+  },
   refreshUploads: async (preferredUploadId) => {
+    const { currentUser, activeView, uploadOwnerFilter, uploadListOffset } = get()
     set({ isLoadingUploads: true, eventsError: null })
 
     try {
-      const response = await fetch('/api/uploads')
-      const payload = (await response.json()) as { uploads: Upload[] }
+      const params = new URLSearchParams({
+        limit: String(UPLOAD_PAGE_SIZE),
+        offset: String(uploadListOffset),
+      })
+
+      if (currentUser?.isAdmin && activeView === 'admin') {
+        params.set('scope', 'all')
+        if (uploadOwnerFilter) {
+          params.set('ownerId', uploadOwnerFilter)
+        }
+      } else {
+        params.set('scope', 'mine')
+      }
+
+      const response = await fetch(`/api/uploads?${params.toString()}`)
+      const payload = (await response.json()) as UploadsResponse
 
       if (!response.ok) {
         throw new Error('Failed to load uploads')
@@ -54,14 +267,15 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
             ? null
             : preferredUploadId && payload.uploads.some((upload) => upload.id === preferredUploadId)
               ? preferredUploadId
-            : state.selectedUploadId && payload.uploads.some((upload) => upload.id === state.selectedUploadId)
-              ? state.selectedUploadId
-              : payload.uploads[0].id
+              : state.selectedUploadId && payload.uploads.some((upload) => upload.id === state.selectedUploadId)
+                ? state.selectedUploadId
+                : payload.uploads[0].id
 
         return {
           uploads: payload.uploads,
+          uploadsTotal: payload.pagination.total,
           selectedUploadId: nextSelectedUploadId,
-          offset: nextSelectedUploadId !== state.selectedUploadId ? 0 : state.offset,
+          eventOffset: nextSelectedUploadId !== state.selectedUploadId ? 0 : state.eventOffset,
         }
       })
     } catch (error) {
@@ -75,7 +289,7 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
     set({ isLoadingEvents: true, eventsError: null })
 
     try {
-      const response = await fetch(`/api/uploads/${uploadId}/events?limit=${PAGE_SIZE}&offset=${nextOffset}`)
+      const response = await fetch(`/api/uploads/${uploadId}/events?limit=${EVENT_PAGE_SIZE}&offset=${nextOffset}`)
       const payload = (await response.json()) as EventsResponse
 
       if (!response.ok) {
@@ -115,14 +329,11 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
       }
 
       set({
-        uploads: [
-          payload.upload,
-          ...get().uploads.filter((upload) => upload.id !== payload.upload?.id),
-        ],
         selectedFile: null,
         selectedUploadId: payload.upload.id,
         eventsResponse: null,
-        offset: 0,
+        uploadListOffset: 0,
+        eventOffset: 0,
       })
       await get().refreshUploads(payload.upload.id)
       await get().loadEvents(payload.upload.id, 0)
@@ -135,4 +346,4 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
   },
 }))
 
-export { PAGE_SIZE }
+export { EVENT_PAGE_SIZE, UPLOAD_PAGE_SIZE }

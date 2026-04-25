@@ -1,5 +1,7 @@
 export type Upload = {
   id: string
+  userId: string | null
+  ownerUsername: string | null
   originalFilename: string
   storagePath: string
   fileSizeBytes: number
@@ -30,6 +32,24 @@ export type LogEvent = {
 export type EventsResponse = {
   upload: Upload
   events: LogEvent[]
+  pagination: {
+    limit: number
+    offset: number
+    total: number
+  }
+}
+
+export type AuthUser = {
+  id: string
+  username: string
+  isAdmin: boolean
+  createdAt: string
+}
+
+export type UserRecord = AuthUser
+
+export type UploadsResponse = {
+  uploads: Upload[]
   pagination: {
     limit: number
     offset: number

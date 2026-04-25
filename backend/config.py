@@ -14,6 +14,7 @@ load_dotenv(Path(__file__).parent / ".env")
 class AppConfig:
     database_url: str
     upload_storage_dir: str
+    secret_key: str
 
 
 def load_config() -> AppConfig:
@@ -23,4 +24,5 @@ def load_config() -> AppConfig:
             "postgresql+psycopg2://log_analyzer:log_analyzer_dev@localhost:5432/log_analyzer",
         ),
         upload_storage_dir=os.environ.get("UPLOAD_STORAGE_DIR", "uploads"),
+        secret_key=os.environ.get("SECRET_KEY", "log-analyzer-dev-secret"),
     )

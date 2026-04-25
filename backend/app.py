@@ -4,19 +4,25 @@ from flask import Flask
 
 from config import load_config
 from db import db
-from routes import api_blueprint
+from routes import api_blueprint, auth_blueprint, uploads_blueprint, users_blueprint
 
 
 def create_app() -> Flask:
     app = Flask(__name__)
     config = load_config()
 
+    app.config["SECRET_KEY"] = config.secret_key
     app.config["SQLALCHEMY_DATABASE_URI"] = config.database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["UPLOAD_STORAGE_DIR"] = config.upload_storage_dir
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     db.init_app(app)
     app.register_blueprint(api_blueprint)
+    app.register_blueprint(auth_blueprint)
+    app.register_blueprint(uploads_blueprint)
+    app.register_blueprint(users_blueprint)
 
     return app
 

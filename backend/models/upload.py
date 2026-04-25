@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, Enum as SqlEnum, Text
+from sqlalchemy import BigInteger, DateTime, Enum as SqlEnum, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db import db
@@ -13,12 +13,18 @@ from models.upload_status import UploadStatus
 
 if TYPE_CHECKING:
     from models.log_event import LogEvent
+    from models.user import User
 
 
 class Upload(db.Model):
     __tablename__ = "uploads"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     original_filename: Mapped[str] = mapped_column(Text, nullable=False)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -41,10 +47,13 @@ class Upload(db.Model):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    user: Mapped["User"] = relationship(back_populates="uploads")
 
     def to_dict(self) -> dict[str, object]:
         return {
             "id": str(self.id),
+            "userId": str(self.user_id) if self.user_id else None,
+            "ownerUsername": self.user.username if self.user else None,
             "originalFilename": self.original_filename,
             "storagePath": self.storage_path,
             "fileSizeBytes": self.file_size_bytes,

@@ -7,13 +7,14 @@ from flask import current_app
 from werkzeug.utils import secure_filename
 
 from db import db
-from models import LogEvent, Upload, UploadStatus
+from models import LogEvent, Upload, UploadStatus, User
 from services import ParseError, parse_zscaler_web_log
 
 
-def create_upload_record(uploaded_file: IO[bytes]) -> tuple[Upload, str | None]:
+def create_upload_record(uploaded_file: IO[bytes], user: User) -> tuple[Upload, str | None]:
     safe_name = secure_filename(uploaded_file.filename) or "upload.log"
     upload = Upload(
+        user_id=user.id,
         original_filename=uploaded_file.filename,
         storage_path="",
         file_size_bytes=0,
