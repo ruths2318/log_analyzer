@@ -52,9 +52,18 @@ cp backend/.env.example backend/.env
 Default local database URL:
 
 ```text
-postgresql://log_analyzer:log_analyzer_dev@localhost:5432/log_analyzer
+postgresql+psycopg2://log_analyzer:log_analyzer_dev@localhost:5432/log_analyzer
 ```
 
 Raw uploaded log files should be stored on disk under `UPLOAD_STORAGE_DIR`.
 PostgreSQL should store upload metadata, parsed events, analysis runs, timeline
 items, and anomaly findings.
+
+Initialize database tables:
+
+```bash
+.venv/bin/python backend/init_db.py
+```
+
+Tables are defined as SQLAlchemy models in Python. The init script creates the
+tables from those models inside the configured PostgreSQL database.
