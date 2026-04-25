@@ -41,3 +41,16 @@ class Upload(db.Model):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "id": str(self.id),
+            "originalFilename": self.original_filename,
+            "storagePath": self.storage_path,
+            "fileSizeBytes": self.file_size_bytes,
+            "status": self.status.value,
+            "errorMessage": self.error_message,
+            "createdAt": self.created_at.isoformat(),
+            "updatedAt": self.updated_at.isoformat(),
+            "eventCount": len(self.log_events),
+        }

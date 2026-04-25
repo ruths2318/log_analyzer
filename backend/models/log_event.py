@@ -53,3 +53,35 @@ class LogEvent(db.Model):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     upload: Mapped[Upload] = relationship(back_populates="log_events")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "id": str(self.id),
+            "uploadId": str(self.upload_id),
+            "rowNumber": self.row_number,
+            "eventTime": self.event_time.isoformat(),
+            "action": self.action,
+            "protocol": self.protocol,
+            "requestMethod": self.request_method,
+            "url": self.url,
+            "hostname": self.hostname,
+            "urlCategory": self.url_category,
+            "urlClass": self.url_class,
+            "urlSupercategory": self.url_supercategory,
+            "userName": self.user_name,
+            "clientIp": self.client_ip,
+            "serverIp": self.server_ip,
+            "statusCode": self.status_code,
+            "appName": self.app_name,
+            "appClass": self.app_class,
+            "department": self.department,
+            "location": self.location,
+            "userAgent": self.user_agent,
+            "fileType": self.file_type,
+            "pageRisk": self.page_risk,
+            "threatCategory": self.threat_category,
+            "threatClass": self.threat_class,
+            "threatName": self.threat_name,
+            "rawEvent": self.raw_event,
+            "createdAt": self.created_at.isoformat(),
+        }

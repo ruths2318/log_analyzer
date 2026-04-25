@@ -4,6 +4,7 @@ from flask import Flask
 
 from config import load_config
 from db import db
+from routes import api_blueprint
 
 
 def create_app() -> Flask:
@@ -15,10 +16,7 @@ def create_app() -> Flask:
     app.config["UPLOAD_STORAGE_DIR"] = config.upload_storage_dir
 
     db.init_app(app)
-
-    @app.get("/api/health")
-    def health() -> dict[str, str]:
-        return {"status": "ok"}
+    app.register_blueprint(api_blueprint)
 
     return app
 
