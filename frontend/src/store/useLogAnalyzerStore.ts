@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 import type { AuthUser, EventsResponse, Upload, UploadsResponse, UserRecord } from '../types'
 
-const DEFAULT_EVENT_PAGE_SIZE = 100
+const DEFAULT_EVENT_PAGE_SIZE = 1000
 const UPLOAD_PAGE_SIZE = 12
 
 type ActiveView = 'workspace' | 'admin'

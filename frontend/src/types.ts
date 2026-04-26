@@ -9,8 +9,10 @@ export type Upload = {
   errorMessage: string | null
   insightsStatus: string
   anomaliesStatus: string
+  aiReviewStatus: string
   insightsErrorMessage: string | null
   anomaliesErrorMessage: string | null
+  aiReviewErrorMessage: string | null
   createdAt: string
   updatedAt: string
   eventCount: number
@@ -161,6 +163,63 @@ export type UploadAnomaliesResponse = {
 }
 
 export type UploadAnomaliesPendingResponse = {
+  upload: Upload
+  status: string
+  error?: string | null
+}
+
+export type SuggestedPivot = {
+  field: string
+  value: string
+}
+
+export type SuggestedTimeRange = {
+  start: string
+  end: string
+}
+
+export type SuggestedView = {
+  id: string
+  title: string
+  summary: string
+  widgets: string[]
+  pivots: SuggestedPivot[]
+  timeRange: SuggestedTimeRange | null
+  tableFields: string[]
+  showOnlyAnomalies: boolean
+}
+
+export type AnomalyAiReview = {
+  anomalyId: string
+  aiSummary: string
+  aiConfidenceScore: number
+  threatHypothesis: string
+  whyItMatters: string
+  recommendedPivotField?: string | null
+  recommendedPivotValue?: string | null
+}
+
+export type UploadAiReview = {
+  uploadId: string
+  analysisVersion: number
+  provider: string | null
+  modelName: string | null
+  executiveSummary: string
+  analystSummary: string
+  topConcerns: string[]
+  recommendedNextSteps: string[]
+  suggestedViews: SuggestedView[]
+  anomalyReviews: AnomalyAiReview[]
+  generatedAt: string
+  updatedAt: string
+}
+
+export type UploadAiReviewResponse = {
+  upload: Upload
+  aiReview: UploadAiReview
+}
+
+export type UploadAiReviewPendingResponse = {
   upload: Upload
   status: string
   error?: string | null

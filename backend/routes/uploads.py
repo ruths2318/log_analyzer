@@ -9,8 +9,8 @@ from flask import current_app
 from werkzeug.utils import secure_filename
 
 from db import db
-from models import LogEvent, Upload, UploadAnomaly, UploadInsight, UploadStatus, User
-from services import ParseError, generate_upload_anomalies, generate_upload_insights, parse_zscaler_web_log
+from models import LogEvent, Upload, UploadAiReview, UploadAnomaly, UploadInsight, UploadStatus, User
+from services import ParseError, generate_upload_ai_review, generate_upload_anomalies, generate_upload_insights, parse_zscaler_web_log
 
 
 def create_upload_record(uploaded_file: IO[bytes], user: User) -> tuple[Upload, str | None]:
@@ -35,8 +35,10 @@ def create_upload_record(uploaded_file: IO[bytes], user: User) -> tuple[Upload, 
     upload.status = UploadStatus.PARSING
     upload.insights_status = "pending"
     upload.anomalies_status = "pending"
+    upload.ai_review_status = "pending"
     upload.insights_error_message = None
     upload.anomalies_error_message = None
+    upload.ai_review_error_message = None
     db.session.commit()
 
     try:
@@ -84,6 +86,7 @@ def create_upload_record(uploaded_file: IO[bytes], user: User) -> tuple[Upload, 
             raise RuntimeError("upload disappeared after parsing")
         return refreshed_upload, None
     except (ParseError, UnicodeDecodeError, ValueError) as exc:
+        current_app.logger.exception("Upload parsing failed for upload %s", upload.id)
         db.session.rollback()
         refreshed_upload = db.session.get(Upload, upload.id)
         if refreshed_upload is None:
@@ -96,19 +99,28 @@ def create_upload_record(uploaded_file: IO[bytes], user: User) -> tuple[Upload, 
 
 def schedule_post_parse_analysis(upload_id) -> None:
     app = current_app._get_current_object()
+    current_app.logger.warning("Scheduling background analysis for upload %s", upload_id)
     worker = threading.Thread(target=run_post_parse_analysis_background, args=(app, upload_id), daemon=True)
     worker.start()
 
 
 def run_post_parse_analysis_background(app, upload_id) -> None:
     with app.app_context():
-        run_post_parse_analysis(upload_id, include_insights=True, include_anomalies=True)
+        run_post_parse_analysis(upload_id, include_insights=True, include_anomalies=True, include_ai_review=True)
 
 
-def run_post_parse_analysis(upload_id, *, include_insights: bool, include_anomalies: bool) -> Upload | None:
+def run_post_parse_analysis(upload_id, *, include_insights: bool, include_anomalies: bool, include_ai_review: bool) -> Upload | None:
     upload = db.session.get(Upload, upload_id)
     if upload is None:
         return None
+
+    current_app.logger.warning(
+        "Starting analysis for upload %s (insights=%s, anomalies=%s, ai_review=%s)",
+        upload_id,
+        include_insights,
+        include_anomalies,
+        include_ai_review,
+    )
 
     analysis_events = load_events_for_analysis(upload_id)
 
@@ -118,10 +130,15 @@ def run_post_parse_analysis(upload_id, *, include_insights: bool, include_anomal
     if include_anomalies:
         upload.anomalies_status = "running"
         upload.anomalies_error_message = None
+    if include_ai_review:
+        upload.ai_review_status = "running"
+        upload.ai_review_error_message = None
     db.session.commit()
 
+    insight_payload = None
     if include_insights:
         try:
+            current_app.logger.warning("Generating insights for upload %s", upload_id)
             insight_payload = generate_upload_insights(analysis_events)
             db.session.query(UploadInsight).filter_by(upload_id=upload_id).delete()
             db.session.add(
@@ -138,7 +155,9 @@ def run_post_parse_analysis(upload_id, *, include_insights: bool, include_anomal
             upload.insights_status = "ready"
             upload.insights_error_message = None
             db.session.commit()
+            current_app.logger.warning("Insights ready for upload %s", upload_id)
         except Exception as exc:  # noqa: BLE001
+            current_app.logger.exception("Insight generation failed for upload %s", upload_id)
             db.session.rollback()
             upload = db.session.get(Upload, upload_id)
             if upload is not None:
@@ -146,8 +165,10 @@ def run_post_parse_analysis(upload_id, *, include_insights: bool, include_anomal
                 upload.insights_error_message = str(exc)
                 db.session.commit()
 
+    anomaly_payloads = None
     if include_anomalies:
         try:
+            current_app.logger.warning("Generating anomalies for upload %s", upload_id)
             anomaly_payloads = generate_upload_anomalies(analysis_events)
             db.session.query(UploadAnomaly).filter_by(upload_id=upload_id).delete()
             db.session.add_all(
@@ -174,7 +195,9 @@ def run_post_parse_analysis(upload_id, *, include_insights: bool, include_anomal
                 upload.anomalies_status = "ready"
                 upload.anomalies_error_message = None
             db.session.commit()
+            current_app.logger.warning("Anomalies ready for upload %s", upload_id)
         except Exception as exc:  # noqa: BLE001
+            current_app.logger.exception("Anomaly generation failed for upload %s", upload_id)
             db.session.rollback()
             upload = db.session.get(Upload, upload_id)
             if upload is not None:
@@ -182,6 +205,47 @@ def run_post_parse_analysis(upload_id, *, include_insights: bool, include_anomal
                 upload.anomalies_error_message = str(exc)
                 db.session.commit()
 
+    if include_ai_review:
+        try:
+            current_app.logger.warning("Generating AI review for upload %s", upload_id)
+            upload = db.session.get(Upload, upload_id)
+            stored_insight = UploadInsight.query.filter_by(upload_id=upload_id).first()
+            stored_anomalies = UploadAnomaly.query.filter_by(upload_id=upload_id).order_by(UploadAnomaly.confidence_score.desc()).all()
+            ai_payload = generate_upload_ai_review(
+                analysis_events,
+                insight_payload if insight_payload is not None else (stored_insight.to_dict() if stored_insight else {}),
+                [anomaly.to_dict() for anomaly in stored_anomalies],
+            )
+            db.session.query(UploadAiReview).filter_by(upload_id=upload_id).delete()
+            db.session.add(
+                UploadAiReview(
+                    upload_id=upload_id,
+                    analysis_version=ai_payload["analysis_version"],
+                    provider=ai_payload["provider"],
+                    model_name=ai_payload["model_name"],
+                    executive_summary=ai_payload["executive_summary"],
+                    analyst_summary=ai_payload["analyst_summary"],
+                    top_concerns=ai_payload["top_concerns"],
+                    recommended_next_steps=ai_payload["recommended_next_steps"],
+                    suggested_views=ai_payload["suggested_views"],
+                    anomaly_reviews=ai_payload["anomaly_reviews"],
+                )
+            )
+            if upload is not None:
+                upload.ai_review_status = "ready"
+                upload.ai_review_error_message = None
+            db.session.commit()
+            current_app.logger.warning("AI review ready for upload %s", upload_id)
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.exception("AI review generation failed for upload %s", upload_id)
+            db.session.rollback()
+            upload = db.session.get(Upload, upload_id)
+            if upload is not None:
+                upload.ai_review_status = "failed"
+                upload.ai_review_error_message = str(exc)
+                db.session.commit()
+
+    current_app.logger.warning("Analysis finished for upload %s", upload_id)
     return db.session.get(Upload, upload_id)
 
 

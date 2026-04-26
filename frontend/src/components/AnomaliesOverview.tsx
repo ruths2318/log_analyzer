@@ -1,12 +1,19 @@
 import { useState } from 'react'
 
 import type { PivotField } from '../eventFields'
-import { useUploadAnomalies } from '../hooks/useUploadAnalysis'
+import type { AnomalyAiReview, UploadAnomaly } from '../types'
 
 type AnomaliesOverviewProps = {
-  uploadId: string | null
+  anomalies: UploadAnomaly[] | null
+  status: string
+  isLoading: boolean
+  isRegenerating: boolean
+  error: string | null
+  onRegenerate: () => void
+  anomalyReviewsById: Record<string, AnomalyAiReview>
   onAddPivot: (field: PivotField, value: string) => void
   onAddTimePivot: (start: string, end: string) => void
+  onFocusRow: (rowNumber: number) => void
 }
 
 const ANOMALY_PIVOT_FIELDS: Partial<Record<string, PivotField>> = {
@@ -17,16 +24,24 @@ const ANOMALY_PIVOT_FIELDS: Partial<Record<string, PivotField>> = {
   rare_user_host: 'hostname',
 }
 
-export function AnomaliesOverview({ uploadId, onAddPivot, onAddTimePivot }: AnomaliesOverviewProps) {
+export function AnomaliesOverview({
+  anomalies,
+  status,
+  isLoading,
+  isRegenerating,
+  error,
+  onRegenerate,
+  anomalyReviewsById,
+  onAddPivot,
+  onAddTimePivot,
+  onFocusRow,
+}: AnomaliesOverviewProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const { data: anomalies, status, isLoading, isRegenerating, error, regenerate } = useUploadAnomalies(uploadId)
-
-  if (!uploadId) {
-    return null
-  }
 
   const isPending = status === 'pending' || status === 'running'
   const topAnomalies = anomalies?.slice(0, 6) ?? []
+  const rowLinkedCount =
+    anomalies?.filter((anomaly) => anomaly.eventId !== null || anomaly.rowNumber !== null || anomaly.timeRangeStart !== null).length ?? 0
 
   return (
     <section className="panel insights-overview-panel">
@@ -41,8 +56,8 @@ export function AnomaliesOverview({ uploadId, onAddPivot, onAddTimePivot }: Anom
           </div>
         </div>
         <div className="panel-actions">
-          {anomalies ? <span className="panel-note">{anomalies.length} findings</span> : null}
-          <button className="ghost-button" type="button" onClick={() => void regenerate()} disabled={isRegenerating}>
+          {anomalies ? <span className="panel-note">{anomalies.length} detections · {rowLinkedCount} table-linked</span> : null}
+          <button className="ghost-button" type="button" onClick={onRegenerate} disabled={isRegenerating}>
             {isRegenerating ? 'Regenerating…' : 'Regenerate anomalies'}
           </button>
         </div>
@@ -62,6 +77,7 @@ export function AnomaliesOverview({ uploadId, onAddPivot, onAddTimePivot }: Anom
       {!isCollapsed && topAnomalies.length > 0 ? (
         <div className="findings-grid">
           {topAnomalies.map((anomaly) => {
+            const aiReview = anomalyReviewsById[anomaly.id]
             const pivotField = ANOMALY_PIVOT_FIELDS[anomaly.anomalyType]
             const pivotValue =
               anomaly.context.clientIp ??
@@ -73,18 +89,31 @@ export function AnomaliesOverview({ uploadId, onAddPivot, onAddTimePivot }: Anom
               <article key={anomaly.id} className={`finding-card finding-${anomaly.severity}`}>
                 <div className="finding-card-header">
                   <span className="metric-label">{Math.round(anomaly.confidenceScore * 100)}% confidence</span>
-                  {anomaly.timeRangeStart && anomaly.timeRangeEnd ? (
-                    <button className="ghost-button" type="button" onClick={() => onAddTimePivot(anomaly.timeRangeStart!, anomaly.timeRangeEnd!)}>
-                      Time pivot
-                    </button>
-                  ) : pivotField && typeof pivotValue === 'string' ? (
-                    <button className="ghost-button" type="button" onClick={() => onAddPivot(pivotField, pivotValue)}>
-                      Pivot
-                    </button>
-                  ) : null}
+                  <div className="finding-card-actions">
+                    {anomaly.rowNumber ? (
+                      <button className="ghost-button" type="button" onClick={() => onFocusRow(anomaly.rowNumber!)}>
+                        Focus row
+                      </button>
+                    ) : null}
+                    {anomaly.timeRangeStart && anomaly.timeRangeEnd ? (
+                      <button className="ghost-button" type="button" onClick={() => onAddTimePivot(anomaly.timeRangeStart!, anomaly.timeRangeEnd!)}>
+                        Time pivot
+                      </button>
+                    ) : pivotField && typeof pivotValue === 'string' ? (
+                      <button className="ghost-button" type="button" onClick={() => onAddPivot(pivotField, pivotValue)}>
+                        Pivot
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 <h3>{anomaly.title}</h3>
                 <p>{anomaly.reason}</p>
+                {aiReview ? (
+                  <div className="anomaly-ai-block">
+                    <p className="panel-note">AI confidence {Math.round(aiReview.aiConfidenceScore * 100)}% · {aiReview.threatHypothesis}</p>
+                    <p>{aiReview.aiSummary}</p>
+                  </div>
+                ) : null}
               </article>
             )
           })}

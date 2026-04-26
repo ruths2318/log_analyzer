@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import type {
+  UploadAiReview,
+  UploadAiReviewPendingResponse,
+  UploadAiReviewResponse,
   Upload,
   UploadAnomaliesPendingResponse,
   UploadAnomaliesResponse,
@@ -187,6 +190,101 @@ export function useUploadAnomalies(uploadId: string | null): AnalysisState<Uploa
     } catch (fetchError: unknown) {
       setStatus('failed')
       setError(fetchError instanceof Error ? fetchError.message : 'Failed to regenerate anomalies')
+    } finally {
+      setIsRegenerating(false)
+    }
+  }, [uploadId])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refresh()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [refresh])
+
+  useEffect(() => {
+    if (!uploadId || (status !== 'pending' && status !== 'running')) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      void refresh()
+    }, POLL_INTERVAL_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [refresh, status, uploadId])
+
+  return { data, upload, status, isLoading, isRegenerating, error, refresh, regenerate }
+}
+
+export function useUploadAiReview(uploadId: string | null): AnalysisState<UploadAiReview> {
+  const [data, setData] = useState<UploadAiReview | null>(null)
+  const [upload, setUpload] = useState<Upload | null>(null)
+  const [status, setStatus] = useState<AsyncStatus>('idle')
+  const [isLoading, setIsLoading] = useState(false)
+  const [isRegenerating, setIsRegenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
+    if (!uploadId) {
+      setData(null)
+      setUpload(null)
+      setStatus('idle')
+      setError(null)
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/uploads/${uploadId}/ai-review`)
+      if (response.status === 202 || response.status === 409 || response.status === 404) {
+        const payload = (await response.json()) as UploadAiReviewPendingResponse
+        setUpload(payload.upload)
+        setData(null)
+        setStatus((payload.status as AsyncStatus) ?? (response.status === 202 ? 'pending' : 'failed'))
+        setError(payload.error ?? null)
+        return
+      }
+
+      const payload = (await response.json()) as UploadAiReviewResponse | { error?: string }
+      if (!response.ok || !('aiReview' in payload)) {
+        throw new Error(('error' in payload && payload.error) || 'Failed to load AI review')
+      }
+      setUpload(payload.upload)
+      setData(payload.aiReview)
+      setStatus('ready')
+      setError(null)
+    } catch (fetchError: unknown) {
+      setData(null)
+      setStatus('failed')
+      setError(fetchError instanceof Error ? fetchError.message : 'Failed to load AI review')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [uploadId])
+
+  const regenerate = useCallback(async () => {
+    if (!uploadId) {
+      return
+    }
+
+    setIsRegenerating(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/uploads/${uploadId}/ai-review/regenerate`, { method: 'POST' })
+      const payload = (await response.json()) as UploadAiReviewResponse | { upload?: Upload; error?: string }
+      if (!response.ok || !('aiReview' in payload)) {
+        throw new Error(('error' in payload && payload.error) || 'Failed to regenerate AI review')
+      }
+      setUpload(payload.upload)
+      setData(payload.aiReview)
+      setStatus('ready')
+      setError(null)
+    } catch (fetchError: unknown) {
+      setStatus('failed')
+      setError(fetchError instanceof Error ? fetchError.message : 'Failed to regenerate AI review')
     } finally {
       setIsRegenerating(false)
     }

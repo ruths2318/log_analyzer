@@ -326,6 +326,60 @@
   gap: 12px;
 }
 
+.ai-review-layout,
+.ai-review-summary,
+.ai-suggested-views,
+.ai-review-list-grid,
+.ai-view-details {
+  display: grid;
+  gap: 12px;
+}
+
+.ai-review-list-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.ai-bullet-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-bullet-list p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.ai-tab-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-tab-button {
+  min-width: 0;
+  flex: 1 1 220px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-alt);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-tab-button span {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.ai-tab-button.is-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.18);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(59, 130, 246, 0.03));
+}
+
 .analysis-status-card {
   display: grid;
   gap: 4px;
@@ -364,9 +418,18 @@
 
 .filter-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1.8fr) repeat(3, minmax(150px, 1fr));
+  grid-template-columns: minmax(220px, 1.8fr) repeat(4, minmax(140px, 1fr));
   gap: 8px;
   min-width: 0;
+}
+
+.filter-field-toggle {
+  align-content: end;
+}
+
+.filter-toggle-button {
+  width: 100%;
+  justify-content: center;
 }
 
 .compact-header {
@@ -695,8 +758,17 @@
   background: rgba(37, 99, 235, 0.09);
 }
 
+.events-table tbody tr.is-anomalous {
+  background: rgba(30, 64, 175, 0.12);
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
 .events-table tbody tr.is-expanded {
   box-shadow: inset 2px 0 0 #3b82f6;
+}
+
+.events-table tbody tr.is-anomalous.is-expanded {
+  box-shadow: inset 3px 0 0 #1d4ed8;
 }
 
 .wrap-cell {
@@ -779,6 +851,25 @@
   color: #93c5fd;
 }
 
+.event-primary-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.anomaly-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.14);
+  color: #bfdbfe;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .status-stack {
   display: grid;
   gap: 4px;
@@ -793,6 +884,10 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
+}
+
+.expanded-field-span {
+  grid-column: 1 / -1;
 }
 
 .expanded-field {
@@ -823,6 +918,52 @@
   background:
     linear-gradient(180deg, rgba(59, 130, 246, 0.06), transparent 28%),
     var(--surface-alt);
+}
+
+.expanded-field-anomaly {
+  border-color: rgba(59, 130, 246, 0.28);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.1), rgba(59, 130, 246, 0.03));
+}
+
+.expanded-anomaly-list {
+  display: grid;
+  gap: 8px;
+}
+
+.expanded-anomaly-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.2);
+}
+
+.expanded-anomaly-card p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.expanded-anomaly-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.finding-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.anomaly-ai-block {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .widget-controls {

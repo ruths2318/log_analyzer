@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { EVENT_FIELD_OPTIONS, getFieldLabel, getFieldValue, getRiskLabel, getStatusBand, type PivotCondition, type PivotField } from '../eventFields'
-import type { EventsResponse, LogEvent } from '../types'
+import type { EventsResponse, LogEvent, UploadAnomaly } from '../types'
 import { formatDateTime } from '../utils'
 
 type EventsPanelProps = {
@@ -15,9 +15,12 @@ type EventsPanelProps = {
   pageSize: number
   pageSizeOptions: number[]
   onPageSizeChange: (pageSize: number) => void
+  anomalyFilterEnabled: boolean
+  anomalies: UploadAnomaly[]
   pivots: PivotCondition[]
   timeRangePivot: { start: string; end: string } | null
   tableFields: PivotField[]
+  focusedRowNumber: number | null
   onAddPivot: (field: PivotField, value: string) => void
   onRemovePivot: (field: PivotField, value: string) => void
   onAddWidget: (field: PivotField) => void
@@ -112,9 +115,12 @@ export function EventsPanel({
   pageSize,
   pageSizeOptions,
   onPageSizeChange,
+  anomalyFilterEnabled,
+  anomalies,
   pivots,
   timeRangePivot,
   tableFields,
+  focusedRowNumber,
   onAddPivot,
   onRemovePivot,
   onAddWidget,
@@ -130,12 +136,38 @@ export function EventsPanel({
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const extraTableFields = tableFields.filter((field) => !PRIMARY_TABLE_FIELDS.includes(field))
   const tableColumnCount = 11 + extraTableFields.length
-  const sortedEvents = [...filteredEvents].sort((left, right) => {
+  const matchingAnomaliesByEventId = useMemo(() => {
+    const grouped = new Map<string, UploadAnomaly[]>()
+    for (const event of filteredEvents) {
+      const matches = anomalies.filter((anomaly) => matchesAnomaly(event, anomaly))
+      if (matches.length > 0) {
+        grouped.set(event.id, matches)
+      }
+    }
+    return grouped
+  }, [anomalies, filteredEvents])
+  const anomalyFilteredEvents = anomalyFilterEnabled
+    ? filteredEvents.filter((event) => matchingAnomaliesByEventId.has(event.id))
+    : filteredEvents
+  const sortedEvents = [...anomalyFilteredEvents].sort((left, right) => {
     const leftValue = getSortableValue(left, sortField)
     const rightValue = getSortableValue(right, sortField)
     const comparison = compareValues(leftValue, rightValue)
     return sortDirection === 'asc' ? comparison : comparison * -1
   })
+
+  useEffect(() => {
+    if (focusedRowNumber === null) {
+      return
+    }
+    const matchingEvent = sortedEvents.find((event) => event.rowNumber === focusedRowNumber)
+    if (matchingEvent) {
+      const timer = window.setTimeout(() => {
+        setExpandedRowId(matchingEvent.id)
+      }, 0)
+      return () => window.clearTimeout(timer)
+    }
+  }, [focusedRowNumber, sortedEvents])
 
   function toggleSort(nextField: SortField) {
     if (sortField === nextField) {
@@ -161,7 +193,7 @@ export function EventsPanel({
         {eventsResponse ? (
           <div className="events-header-actions">
             <div className="pager">
-              <span className="panel-note">{filteredEvents.length} rows visible</span>
+              <span className="panel-note">{sortedEvents.length} rows visible</span>
               <label className="mini-select mini-select-inline">
                 <span>Rows</span>
                 <select value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))}>
@@ -231,10 +263,10 @@ export function EventsPanel({
         <p className="empty-state">Loading events...</p>
       ) : !isCollapsed && !eventsResponse ? (
         <p className="empty-state">Select an upload to inspect parsed events.</p>
-      ) : !isCollapsed && filteredEvents.length === 0 ? (
+      ) : !isCollapsed && sortedEvents.length === 0 ? (
         <div className="empty-surface">
           <p className="empty-state">No events match the current filters.</p>
-          <p className="panel-note">Remove one pivot or broaden the free-text filters.</p>
+          <p className="panel-note">{anomalyFilterEnabled ? 'Try turning off anomaly-only mode or broadening your pivots.' : 'Remove one pivot or broaden the free-text filters.'}</p>
         </div>
       ) : !isCollapsed ? (
         <div className="table-wrap">
@@ -262,6 +294,8 @@ export function EventsPanel({
                 const riskLabel = getRiskLabel(event)
                 const statusBand = getStatusBand(event.statusCode)
                 const isElevated = event.action.toLowerCase() === 'blocked' || Boolean(event.pageRisk || event.threatCategory)
+                const eventAnomalies = matchingAnomaliesByEventId.get(event.id) ?? []
+                const isAnomalous = eventAnomalies.length > 0
                 const isExpanded = expandedRowId === event.id
                 const detailFields: ExpandedDetail[] = [
                   ...EXPANDED_FIELDS.map((option) => ({
@@ -293,7 +327,7 @@ export function EventsPanel({
                   (
                     <tr
                       key={event.id}
-                      className={`${isElevated ? 'is-elevated ' : ''}${isExpanded ? 'is-expanded' : ''}`.trim() || undefined}
+                      className={`${isElevated ? 'is-elevated ' : ''}${isAnomalous ? 'is-anomalous ' : ''}${isExpanded ? 'is-expanded' : ''}`.trim() || undefined}
                       onClick={() => setExpandedRowId(isExpanded ? null : event.id)}
                     >
                       <td>
@@ -311,7 +345,10 @@ export function EventsPanel({
                       <td>{event.rowNumber}</td>
                       <td>{formatDateTime(event.eventTime)}</td>
                       <td>
-                        <TableValue field="action" value={getFieldValue(event, 'action')} pivots={pivots} onAddPivot={onAddPivot} onRemovePivot={onRemovePivot} />
+                        <div className="event-primary-cell">
+                          <TableValue field="action" value={getFieldValue(event, 'action')} pivots={pivots} onAddPivot={onAddPivot} onRemovePivot={onRemovePivot} />
+                          {isAnomalous ? <span className="anomaly-inline-badge">Anomalous</span> : null}
+                        </div>
                       </td>
                       <td>
                         <TableValue field="userName" value={getFieldValue(event, 'userName')} pivots={pivots} onAddPivot={onAddPivot} onRemovePivot={onRemovePivot} />
@@ -349,6 +386,22 @@ export function EventsPanel({
                         <tr key={`${event.id}-expanded`} className="expanded-row">
                           <td colSpan={tableColumnCount}>
                             <div className="expanded-row-grid">
+                              {eventAnomalies.length > 0 ? (
+                                <div className="expanded-field expanded-field-anomaly expanded-field-span">
+                                  <span className="metric-label">Anomaly evidence</span>
+                                  <div className="expanded-anomaly-list">
+                                    {eventAnomalies.map((anomaly) => (
+                                      <article key={anomaly.id} className={`expanded-anomaly-card finding-${anomaly.severity}`}>
+                                        <div className="expanded-anomaly-header">
+                                          <strong>{anomaly.title}</strong>
+                                          <span>{Math.round(anomaly.confidenceScore * 100)}% confidence</span>
+                                        </div>
+                                        <p>{anomaly.reason}</p>
+                                      </article>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
                               {detailFields.map((detail, index) => (
                                 <div key={`${'field' in detail ? detail.field : detail.label}-${index}`} className="expanded-field">
                                   <span className="metric-label">{detail.label}</span>
@@ -436,4 +489,49 @@ function compareValues(left: string | number, right: string | number) {
     return left - right
   }
   return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' })
+}
+
+function matchesAnomaly(event: LogEvent, anomaly: UploadAnomaly) {
+  if (anomaly.eventId === event.id) {
+    return true
+  }
+  if (anomaly.rowNumber !== null && anomaly.rowNumber === event.rowNumber) {
+    return true
+  }
+
+  const context = anomaly.context as Record<string, unknown>
+  const eventTime = new Date(event.eventTime).getTime()
+  const startTime = anomaly.timeRangeStart ? new Date(anomaly.timeRangeStart).getTime() : null
+  const endTime = anomaly.timeRangeEnd ? new Date(anomaly.timeRangeEnd).getTime() : null
+  const inTimeWindow =
+    startTime !== null && endTime !== null ? eventTime >= startTime && eventTime < endTime : true
+
+  switch (anomaly.anomalyType) {
+    case 'blocked_burst_by_ip':
+    case 'request_burst_by_ip':
+      return (
+        inTimeWindow &&
+        typeof context.clientIp === 'string' &&
+        event.clientIp === context.clientIp &&
+        (anomaly.anomalyType !== 'blocked_burst_by_ip' || event.action.toLowerCase() === 'blocked')
+      )
+    case 'user_destination_spread':
+      return typeof context.userName === 'string' && event.userName === context.userName
+    case 'error_spike_by_host':
+      return (
+        typeof context.hostname === 'string' &&
+        event.hostname === context.hostname &&
+        typeof event.statusCode === 'number' &&
+        event.statusCode >= 400
+      )
+    case 'rare_user_host':
+      return (
+        typeof context.userName === 'string' &&
+        typeof context.hostname === 'string' &&
+        event.userName === context.userName &&
+        event.hostname === context.hostname
+      )
+    default:
+      return false
+  }
 }

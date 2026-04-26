@@ -12,6 +12,7 @@ from models.common import utc_now
 from models.upload_status import UploadStatus
 
 if TYPE_CHECKING:
+    from models.upload_ai_review import UploadAiReview
     from models.upload_anomaly import UploadAnomaly
     from models.log_event import LogEvent
     from models.upload_insight import UploadInsight
@@ -39,8 +40,10 @@ class Upload(db.Model):
     error_message: Mapped[str | None] = mapped_column(Text)
     insights_status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     anomalies_status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    ai_review_status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     insights_error_message: Mapped[str | None] = mapped_column(Text)
     anomalies_error_message: Mapped[str | None] = mapped_column(Text)
+    ai_review_error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -65,6 +68,12 @@ class Upload(db.Model):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    upload_ai_review: Mapped["UploadAiReview | None"] = relationship(
+        back_populates="upload",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -78,8 +87,10 @@ class Upload(db.Model):
             "errorMessage": self.error_message,
             "insightsStatus": self.insights_status,
             "anomaliesStatus": self.anomalies_status,
+            "aiReviewStatus": self.ai_review_status,
             "insightsErrorMessage": self.insights_error_message,
             "anomaliesErrorMessage": self.anomalies_error_message,
+            "aiReviewErrorMessage": self.ai_review_error_message,
             "createdAt": self.created_at.isoformat(),
             "updatedAt": self.updated_at.isoformat(),
             "eventCount": len(self.log_events),

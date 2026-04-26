@@ -3,6 +3,7 @@ import { startTransition, useDeferredValue, useEffect, useState } from 'react'
 import './App.css'
 import { ActivityTimeline } from './components/ActivityTimeline'
 import { AnomaliesOverview } from './components/AnomaliesOverview'
+import { AiReviewPanel } from './components/AiReviewPanel'
 import { FieldAtlasModal } from './components/FieldAtlasModal'
 import { EventsPanel } from './components/EventsPanel'
 import { EventInsights } from './components/EventInsights'
@@ -13,8 +14,9 @@ import { UploadsPanel } from './components/UploadsPanel'
 import { UsersPanel } from './components/UsersPanel'
 import { WidgetFieldModal } from './components/WidgetFieldModal'
 import { getFieldLabel, getRiskLabel, getStatusBand, matchesPivot, type PivotCondition, type PivotField } from './eventFields'
+import { useUploadAiReview, useUploadAnomalies } from './hooks/useUploadAnalysis'
 import { DEFAULT_EVENT_PAGE_SIZE, UPLOAD_PAGE_SIZE, useLogAnalyzerStore } from './store/useLogAnalyzerStore'
-import type { LogEvent } from './types'
+import type { LogEvent, SuggestedView } from './types'
 
 function matchesEvent(event: LogEvent, query: string) {
   if (!query) {
@@ -45,11 +47,49 @@ function getSortedOptions(values: string[], fallbackLabel: string) {
   return [fallbackLabel, ...values.filter((value) => value !== fallbackLabel).sort((left, right) => left.localeCompare(right))]
 }
 
+function isPivotField(value: string): value is PivotField {
+  return [
+    'action',
+    'userName',
+    'clientIp',
+    'serverIp',
+    'hostname',
+    'urlCategory',
+    'urlClass',
+    'urlSupercategory',
+    'requestMethod',
+    'protocol',
+    'appName',
+    'appClass',
+    'department',
+    'location',
+    'userAgent',
+    'fileType',
+    'riskLabel',
+    'statusBand',
+    'threatCategory',
+    'threatClass',
+    'threatName',
+  ].includes(value)
+}
+
 const EVENT_PAGE_SIZE_OPTIONS = [25, 50, 100, 500, 1000]
 type InsightWidget = {
   id: string
   field: PivotField
   view: 'bars' | 'pie'
+}
+
+type WorkspaceSnapshot = {
+  searchInput: string
+  actionFilter: string
+  riskFilter: string
+  statusBandFilter: string
+  pivots: PivotCondition[]
+  insightWidgets: InsightWidget[]
+  timeRangePivot: { start: string; end: string } | null
+  tableFields: PivotField[]
+  showOnlyAnomalies: boolean
 }
 
 const DEFAULT_TABLE_FIELDS: PivotField[] = [
@@ -123,6 +163,27 @@ function App() {
   const [tableFields, setTableFields] = useState<PivotField[]>(DEFAULT_TABLE_FIELDS)
   const [isInsightsModalOpen, setIsInsightsModalOpen] = useState(false)
   const [isWidgetFieldModalOpen, setIsWidgetFieldModalOpen] = useState(false)
+  const [showOnlyAnomalies, setShowOnlyAnomalies] = useState(false)
+  const [focusedAnomalyRowNumber, setFocusedAnomalyRowNumber] = useState<number | null>(null)
+  const [preAiWorkspaceSnapshot, setPreAiWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null)
+  const [activeSuggestedViewId, setActiveSuggestedViewId] = useState<string | null>(null)
+  const {
+    data: uploadAnomalies,
+    status: anomaliesStatus,
+    isLoading: isLoadingAnomalies,
+    isRegenerating: isRegeneratingAnomalies,
+    error: anomaliesError,
+    regenerate: regenerateAnomalies,
+  } = useUploadAnomalies(selectedUploadId)
+  const {
+    data: aiReview,
+    status: aiReviewStatus,
+    isLoading: isLoadingAiReview,
+    isRegenerating: isRegeneratingAiReview,
+    error: aiReviewError,
+    regenerate: regenerateAiReview,
+  } = useUploadAiReview(selectedUploadId)
+  const anomalyReviewsById = Object.fromEntries((aiReview?.anomalyReviews ?? []).map((review) => [review.anomalyId, review]))
 
   useEffect(() => {
     void bootstrapAuth()
@@ -173,6 +234,10 @@ function App() {
     setIsWidgetFieldModalOpen(false)
     setTimeRangePivot(null)
     setTableFields(DEFAULT_TABLE_FIELDS)
+    setShowOnlyAnomalies(false)
+    setFocusedAnomalyRowNumber(null)
+    setPreAiWorkspaceSnapshot(null)
+    setActiveSuggestedViewId(null)
   }
 
   function addPivot(field: PivotField, value: string) {
@@ -206,6 +271,69 @@ function App() {
 
   function addTableField(field: PivotField) {
     setTableFields((current) => (current.includes(field) ? current : [...current, field]))
+  }
+
+  function captureWorkspaceSnapshot(): WorkspaceSnapshot {
+    return {
+      searchInput,
+      actionFilter,
+      riskFilter,
+      statusBandFilter,
+      pivots: [...pivots],
+      insightWidgets: insightWidgets.map((widget) => ({ ...widget })),
+      timeRangePivot: timeRangePivot ? { ...timeRangePivot } : null,
+      tableFields: [...tableFields],
+      showOnlyAnomalies,
+    }
+  }
+
+  function restoreWorkspaceSnapshot(snapshot: WorkspaceSnapshot) {
+    setSearchInput(snapshot.searchInput)
+    setActionFilter(snapshot.actionFilter)
+    setRiskFilter(snapshot.riskFilter)
+    setStatusBandFilter(snapshot.statusBandFilter)
+    setPivots(snapshot.pivots)
+    setInsightWidgets(snapshot.insightWidgets)
+    setTimeRangePivot(snapshot.timeRangePivot)
+    setTableFields(snapshot.tableFields)
+    setShowOnlyAnomalies(snapshot.showOnlyAnomalies)
+    setFocusedAnomalyRowNumber(null)
+  }
+
+  function applySuggestedView(view: SuggestedView) {
+    setPreAiWorkspaceSnapshot((current) => current ?? captureWorkspaceSnapshot())
+    setActiveSuggestedViewId(view.id)
+    const nextWidgets = view.widgets.filter(isPivotField)
+    const nextPivots = view.pivots.filter((pivot) => isPivotField(pivot.field)).map((pivot) => ({ field: pivot.field as PivotField, value: pivot.value }))
+    const nextTableFields = view.tableFields.filter(isPivotField)
+
+    setSearchInput('')
+    setActionFilter('All actions')
+    setRiskFilter('All risk levels')
+    setStatusBandFilter('All status bands')
+    setPivots(nextPivots)
+    setShowOnlyAnomalies(view.showOnlyAnomalies)
+    setFocusedAnomalyRowNumber(null)
+    setTimeRangePivot(view.timeRange ? { start: view.timeRange.start, end: view.timeRange.end } : null)
+    setInsightWidgets(
+      nextWidgets.length > 0
+        ? nextWidgets.map((field, index) => ({ id: `ai-widget-${field}-${index}`, field, view: index === 0 ? 'bars' : 'pie' }))
+        : [
+            { id: 'widget-user', field: 'userName', view: 'bars' },
+            { id: 'widget-ip', field: 'clientIp', view: 'bars' },
+            { id: 'widget-host', field: 'hostname', view: 'bars' },
+          ],
+    )
+    setTableFields(nextTableFields.length > 0 ? Array.from(new Set([...DEFAULT_TABLE_FIELDS, ...nextTableFields])) : DEFAULT_TABLE_FIELDS)
+  }
+
+  function restorePreAiWorkspace() {
+    if (!preAiWorkspaceSnapshot) {
+      return
+    }
+    restoreWorkspaceSnapshot(preAiWorkspaceSnapshot)
+    setPreAiWorkspaceSnapshot(null)
+    setActiveSuggestedViewId(null)
   }
 
   const searchQuery = useDeferredValue(searchInput.trim().toLowerCase())
@@ -459,10 +587,28 @@ function App() {
             onAddTimePivot={(start, end) => setTimeRangePivot({ start, end })}
           />
           <AnomaliesOverview
-            key={`anomalies-${selectedUploadId ?? 'no-upload'}`}
-            uploadId={selectedUploadId}
+            anomalies={uploadAnomalies}
+            status={anomaliesStatus}
+            isLoading={isLoadingAnomalies}
+            isRegenerating={isRegeneratingAnomalies}
+            error={anomaliesError}
+            onRegenerate={() => void regenerateAnomalies()}
+            anomalyReviewsById={anomalyReviewsById}
             onAddPivot={addPivot}
             onAddTimePivot={(start, end) => setTimeRangePivot({ start, end })}
+            onFocusRow={(rowNumber) => setFocusedAnomalyRowNumber(rowNumber)}
+          />
+          <AiReviewPanel
+            review={aiReview}
+            status={aiReviewStatus}
+            isLoading={isLoadingAiReview}
+            isRegenerating={isRegeneratingAiReview}
+            error={aiReviewError}
+            onRegenerate={() => void regenerateAiReview()}
+            activeViewId={activeSuggestedViewId}
+            hasRestorableView={preAiWorkspaceSnapshot !== null}
+            onSelectSuggestedView={applySuggestedView}
+            onRestorePreviousView={restorePreAiWorkspace}
           />
 
           <section className="panel control-panel">
@@ -515,6 +661,16 @@ function App() {
                   ))}
                 </select>
               </label>
+              <label className="filter-field filter-field-toggle">
+                <span>Anomalies</span>
+                <button
+                  className={`nav-button filter-toggle-button ${showOnlyAnomalies ? 'is-active' : ''}`}
+                  type="button"
+                  onClick={() => setShowOnlyAnomalies((current) => !current)}
+                >
+                  {showOnlyAnomalies ? 'Only anomalies' : 'All events'}
+                </button>
+              </label>
             </div>
           </section>
 
@@ -553,9 +709,12 @@ function App() {
                 EVENT_PAGE_SIZE_OPTIONS.includes(pageSize) ? pageSize : DEFAULT_EVENT_PAGE_SIZE,
               )
             }
+            anomalyFilterEnabled={showOnlyAnomalies}
+            anomalies={uploadAnomalies ?? []}
             pivots={pivots}
             timeRangePivot={timeRangePivot}
             tableFields={tableFields}
+            focusedRowNumber={focusedAnomalyRowNumber}
             onAddPivot={addPivot}
             onRemovePivot={removePivot}
             onAddWidget={addInsightWidget}
