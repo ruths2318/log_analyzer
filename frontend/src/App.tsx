@@ -5,11 +5,12 @@ import { ActivityTimeline } from './components/ActivityTimeline'
 import { FieldAtlasModal } from './components/FieldAtlasModal'
 import { EventsPanel } from './components/EventsPanel'
 import { EventInsights } from './components/EventInsights'
+import { InsightsOverview } from './components/InsightsOverview'
 import { LoginPanel } from './components/LoginPanel'
-import { SummaryGrid } from './components/SummaryGrid'
 import { UploadPanel } from './components/UploadPanel'
 import { UploadsPanel } from './components/UploadsPanel'
 import { UsersPanel } from './components/UsersPanel'
+import { WidgetFieldModal } from './components/WidgetFieldModal'
 import { getFieldLabel, getRiskLabel, getStatusBand, matchesPivot, type PivotCondition, type PivotField } from './eventFields'
 import { DEFAULT_EVENT_PAGE_SIZE, UPLOAD_PAGE_SIZE, useLogAnalyzerStore } from './store/useLogAnalyzerStore'
 import type { LogEvent } from './types'
@@ -119,7 +120,8 @@ function App() {
   const [isUploadListExpanded, setIsUploadListExpanded] = useState(false)
   const [timeRangePivot, setTimeRangePivot] = useState<{ start: string; end: string } | null>(null)
   const [tableFields, setTableFields] = useState<PivotField[]>(DEFAULT_TABLE_FIELDS)
-  const [isFieldAtlasOpen, setIsFieldAtlasOpen] = useState(false)
+  const [isInsightsModalOpen, setIsInsightsModalOpen] = useState(false)
+  const [isWidgetFieldModalOpen, setIsWidgetFieldModalOpen] = useState(false)
 
   useEffect(() => {
     void bootstrapAuth()
@@ -166,7 +168,8 @@ function App() {
       { id: 'widget-ip', field: 'clientIp', view: 'bars' },
       { id: 'widget-host', field: 'hostname', view: 'bars' },
     ])
-    setIsFieldAtlasOpen(false)
+    setIsInsightsModalOpen(false)
+    setIsWidgetFieldModalOpen(false)
     setTimeRangePivot(null)
     setTableFields(DEFAULT_TABLE_FIELDS)
   }
@@ -447,10 +450,12 @@ function App() {
             </div>
           </section>
 
-          <SummaryGrid
-            selectedUpload={selectedUpload}
-            events={visibleEvents}
-            filteredEvents={filteredEvents}
+          <InsightsOverview
+            key={selectedUploadId ?? 'no-upload'}
+            uploadId={selectedUploadId}
+            onOpenInsightsModal={() => setIsInsightsModalOpen(true)}
+            onAddPivot={addPivot}
+            onAddTimePivot={(start, end) => setTimeRangePivot({ start, end })}
           />
 
           <section className="panel control-panel">
@@ -516,7 +521,7 @@ function App() {
               events={filteredEvents}
               widgets={insightWidgets}
               pivots={pivots}
-              onOpenAtlas={() => setIsFieldAtlasOpen(true)}
+              onOpenFieldAtlas={() => setIsWidgetFieldModalOpen(true)}
               onFieldChange={updateInsightWidgetField}
               onViewChange={updateInsightWidgetView}
               onRemoveWidget={removeInsightWidget}
@@ -558,11 +563,21 @@ function App() {
           />
         </section>
       </main>
-      {isFieldAtlasOpen ? (
+      {isInsightsModalOpen ? (
         <FieldAtlasModal
-          events={filteredEvents}
+          key={selectedUploadId ?? 'no-upload'}
+          uploadId={selectedUploadId}
+          onClose={() => setIsInsightsModalOpen(false)}
+          onAddPivot={addPivot}
+          onAddTimePivot={(start, end) => setTimeRangePivot({ start, end })}
+        />
+      ) : null}
+      {isWidgetFieldModalOpen ? (
+        <WidgetFieldModal
+          key={`widget-${selectedUploadId ?? 'no-upload'}`}
+          uploadId={selectedUploadId}
           pivots={pivots}
-          onClose={() => setIsFieldAtlasOpen(false)}
+          onClose={() => setIsWidgetFieldModalOpen(false)}
           onAddWidget={addInsightWidget}
           onAddPivot={addPivot}
           onRemovePivot={removePivot}

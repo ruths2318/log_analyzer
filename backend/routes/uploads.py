@@ -7,8 +7,8 @@ from flask import current_app
 from werkzeug.utils import secure_filename
 
 from db import db
-from models import LogEvent, Upload, UploadStatus, User
-from services import ParseError, parse_zscaler_web_log
+from models import LogEvent, Upload, UploadInsight, UploadStatus, User
+from services import ParseError, generate_upload_insights, parse_zscaler_web_log
 
 
 def create_upload_record(uploaded_file: IO[bytes], user: User) -> tuple[Upload, str | None]:
@@ -68,6 +68,19 @@ def create_upload_record(uploaded_file: IO[bytes], user: User) -> tuple[Upload, 
                 )
                 for event in events
             ]
+        )
+        insight_payload = generate_upload_insights(events)
+        db.session.query(UploadInsight).filter_by(upload_id=upload.id).delete()
+        db.session.add(
+            UploadInsight(
+                upload_id=upload.id,
+                analysis_version=insight_payload["analysis_version"],
+                summary=insight_payload["summary"],
+                spotlight_cards=insight_payload["spotlight_cards"],
+                key_findings=insight_payload["key_findings"],
+                focus_sections=insight_payload["focus_sections"],
+                field_distributions=insight_payload["field_distributions"],
+            )
         )
         upload.status = UploadStatus.PARSED
         upload.error_message = None

@@ -6,7 +6,7 @@ from flask import Blueprint, abort, jsonify, request
 
 from auth import get_current_user, login_required, require_upload_access
 from db import db
-from models import LogEvent, Upload
+from models import LogEvent, Upload, UploadInsight
 from routes.uploads import create_upload_record
 
 
@@ -75,6 +75,20 @@ def get_upload_events(upload_id: str):
             "pagination": {"limit": limit, "offset": offset, "total": total},
         }
     )
+
+
+@uploads_blueprint.get("/<upload_id>/insights")
+@login_required
+def get_upload_insights(upload_id: str):
+    current_user = get_current_user()
+    assert current_user is not None
+    upload = get_upload_or_404(upload_id)
+    require_upload_access(upload, current_user)
+
+    insight = UploadInsight.query.filter_by(upload_id=upload.id).first()
+    if insight is None:
+        return jsonify({"error": "insights are not available for this upload"}), 404
+    return jsonify({"upload": upload.to_dict(), "insights": insight.to_dict()})
 
 
 @uploads_blueprint.post("")

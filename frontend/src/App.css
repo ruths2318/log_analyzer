@@ -221,6 +221,17 @@
   min-width: 0;
 }
 
+.panel-title-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.panel-collapse-button {
+  flex: 0 0 auto;
+}
+
 .hero-panel {
   padding: 14px 16px;
 }
@@ -303,6 +314,16 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   min-width: 0;
+}
+
+.insights-overview-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.insights-overview-grid {
+  display: grid;
+  gap: 12px;
 }
 
 .summary-panel {
@@ -402,7 +423,7 @@
   right: 0;
   bottom: 0;
   left: 0;
-  background: #f97316;
+  background: #3b82f6;
 }
 
 .insight-grid {
@@ -416,7 +437,7 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   background:
-    linear-gradient(135deg, rgba(249, 115, 22, 0.1), rgba(168, 85, 247, 0.08) 55%, rgba(20, 184, 166, 0.08)),
+    linear-gradient(180deg, rgba(37, 99, 235, 0.09), rgba(59, 130, 246, 0.05)),
     var(--surface-alt);
   padding: 10px;
   min-width: 0;
@@ -464,8 +485,8 @@
 }
 
 .segment-button.is-active {
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(168, 85, 247, 0.22) 55%, rgba(20, 184, 166, 0.2));
-  color: #fff1f2;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(59, 130, 246, 0.2));
+  color: #dbeafe;
 }
 
 .mini-select span {
@@ -490,8 +511,8 @@
 }
 
 .insight-row.is-active {
-  border-color: #ec4899;
-  background: linear-gradient(135deg, rgba(236, 72, 153, 0.12), rgba(59, 130, 246, 0.08));
+  border-color: var(--accent);
+  background: rgba(37, 99, 235, 0.1);
 }
 
 .insight-labels strong {
@@ -623,16 +644,41 @@
   text-transform: uppercase;
 }
 
+.table-sort-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.table-sort-button.is-active {
+  color: #dbeafe;
+}
+
+.table-sort-indicator {
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
 .events-table tbody tr:hover {
-  background: linear-gradient(90deg, rgba(20, 184, 166, 0.07), rgba(249, 115, 22, 0.05));
+  background: rgba(59, 130, 246, 0.06);
 }
 
 .events-table tbody tr.is-elevated {
-  background: linear-gradient(90deg, rgba(249, 115, 22, 0.11), rgba(239, 68, 68, 0.06));
+  background: rgba(37, 99, 235, 0.09);
 }
 
 .events-table tbody tr.is-expanded {
-  box-shadow: inset 2px 0 0 #a855f7;
+  box-shadow: inset 2px 0 0 #3b82f6;
 }
 
 .wrap-cell {
@@ -711,8 +757,8 @@
 }
 
 .cell-action-button.is-active {
-  border-color: #f59e0b;
-  color: #fbbf24;
+  border-color: #60a5fa;
+  color: #93c5fd;
 }
 
 .status-stack {
@@ -722,7 +768,7 @@
 }
 
 .expanded-row td {
-  background: linear-gradient(180deg, rgba(168, 85, 247, 0.08), rgba(20, 184, 166, 0.04));
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(59, 130, 246, 0.03));
 }
 
 .expanded-row-grid {
@@ -739,7 +785,7 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   background:
-    linear-gradient(180deg, rgba(34, 197, 94, 0.06), transparent 28%),
+    linear-gradient(180deg, rgba(37, 99, 235, 0.06), transparent 28%),
     var(--surface-alt);
 }
 
@@ -757,7 +803,7 @@
 
 .expanded-field-raw {
   background:
-    linear-gradient(180deg, rgba(168, 85, 247, 0.06), transparent 28%),
+    linear-gradient(180deg, rgba(59, 130, 246, 0.06), transparent 28%),
     var(--surface-alt);
 }
 
@@ -810,8 +856,8 @@
 }
 
 .pie-legend-row.is-active {
-  border-color: #f97316;
-  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.2);
+  border-color: #3b82f6;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2);
 }
 
 .pie-swatch {
@@ -828,7 +874,7 @@
 }
 
 .pie-legend-copy strong {
-  color: #fef3c7;
+  color: #dbeafe;
 }
 
 .modal-backdrop {
@@ -849,10 +895,78 @@
   border: 1px solid var(--border);
   border-radius: 18px;
   background:
-    linear-gradient(135deg, rgba(249, 115, 22, 0.08), rgba(168, 85, 247, 0.08) 50%, rgba(20, 184, 166, 0.08)),
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(59, 130, 246, 0.08) 50%, rgba(96, 165, 250, 0.08)),
     #07111f;
   box-shadow: 0 24px 80px rgba(2, 6, 23, 0.48);
   padding: 16px;
+}
+
+.atlas-layout,
+.atlas-section {
+  display: grid;
+  gap: 12px;
+}
+
+.atlas-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.atlas-spotlight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.spotlight-card,
+.finding-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  min-width: 0;
+}
+
+.spotlight-card strong,
+.finding-card h3 {
+  margin: 0;
+}
+
+.spotlight-card p,
+.finding-card p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.spotlight-high,
+.finding-high {
+  background: linear-gradient(135deg, rgba(29, 78, 216, 0.16), rgba(37, 99, 235, 0.1));
+}
+
+.spotlight-medium,
+.finding-medium {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(59, 130, 246, 0.09));
+}
+
+.spotlight-low,
+.finding-low {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(96, 165, 250, 0.08));
+}
+
+.finding-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.findings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
 }
 
 .atlas-grid {
@@ -906,8 +1020,8 @@
 }
 
 .atlas-row.is-active {
-  border-color: #f97316;
-  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.22);
+  border-color: #3b82f6;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.22);
 }
 
 .atlas-row-head,
@@ -933,6 +1047,36 @@
   height: 10px;
   border-radius: 999px;
   flex: 0 0 auto;
+}
+
+.atlas-swatch-0,
+.atlas-bar-fill-0 {
+  background: #1d4ed8;
+}
+
+.atlas-swatch-1,
+.atlas-bar-fill-1 {
+  background: #2563eb;
+}
+
+.atlas-swatch-2,
+.atlas-bar-fill-2 {
+  background: #3b82f6;
+}
+
+.atlas-swatch-3,
+.atlas-bar-fill-3 {
+  background: #60a5fa;
+}
+
+.atlas-swatch-4,
+.atlas-bar-fill-4 {
+  background: #93c5fd;
+}
+
+.atlas-swatch-5,
+.atlas-bar-fill-5 {
+  background: #0ea5e9;
 }
 
 .atlas-bar-track {

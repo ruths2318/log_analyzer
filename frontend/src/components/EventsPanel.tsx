@@ -32,6 +32,9 @@ type ExpandedDetail =
   | { field: PivotField; label: string; value: string }
   | { label: string; value: string }
 
+type SortField = 'rowNumber' | 'eventTime' | PivotField
+type SortDirection = 'asc' | 'desc'
+
 const PRIMARY_TABLE_FIELDS: PivotField[] = [
   'action',
   'userName',
@@ -122,15 +125,38 @@ export function EventsPanel({
   onNextPage,
 }: EventsPanelProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [sortField, setSortField] = useState<SortField>('eventTime')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const extraTableFields = tableFields.filter((field) => !PRIMARY_TABLE_FIELDS.includes(field))
   const tableColumnCount = 11 + extraTableFields.length
+  const sortedEvents = [...filteredEvents].sort((left, right) => {
+    const leftValue = getSortableValue(left, sortField)
+    const rightValue = getSortableValue(right, sortField)
+    const comparison = compareValues(leftValue, rightValue)
+    return sortDirection === 'asc' ? comparison : comparison * -1
+  })
+
+  function toggleSort(nextField: SortField) {
+    if (sortField === nextField) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortField(nextField)
+    setSortDirection(nextField === 'eventTime' ? 'asc' : 'desc')
+  }
 
   return (
     <section className="panel events-panel">
       <div className="panel-header">
-        <div>
-          <p className="section-label">Parsed output</p>
-          <h2>Events</h2>
+        <div className="panel-title-group">
+          <button className="ghost-button panel-collapse-button" type="button" onClick={() => setIsCollapsed((current) => !current)}>
+            {isCollapsed ? 'Expand' : 'Collapse'}
+          </button>
+          <div>
+            <p className="section-label">Parsed output</p>
+            <h2>Events</h2>
+          </div>
         </div>
         {eventsResponse ? (
           <div className="events-header-actions">
@@ -199,39 +225,40 @@ export function EventsPanel({
       ) : null}
 
       {eventsError ? <p className="error-text">{eventsError}</p> : null}
+      {isCollapsed ? <p className="panel-note">Events table collapsed.</p> : null}
 
-      {isLoadingEvents ? (
+      {!isCollapsed && isLoadingEvents ? (
         <p className="empty-state">Loading events...</p>
-      ) : !eventsResponse ? (
+      ) : !isCollapsed && !eventsResponse ? (
         <p className="empty-state">Select an upload to inspect parsed events.</p>
-      ) : filteredEvents.length === 0 ? (
+      ) : !isCollapsed && filteredEvents.length === 0 ? (
         <div className="empty-surface">
           <p className="empty-state">No events match the current filters.</p>
           <p className="panel-note">Remove one pivot or broaden the free-text filters.</p>
         </div>
-      ) : (
+      ) : !isCollapsed ? (
         <div className="table-wrap">
           <table className="events-table">
             <thead>
               <tr>
                 <th />
-                <th>Row</th>
-                <th>Time</th>
-                <th>Action</th>
-                <th>User</th>
-                <th>Source IP</th>
-                <th>Method</th>
-                <th>Host</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Risk</th>
+                <th>{renderSortableHeader('Row', 'rowNumber', sortField, sortDirection, toggleSort)}</th>
+                <th>{renderSortableHeader('Time', 'eventTime', sortField, sortDirection, toggleSort)}</th>
+                <th>{renderSortableHeader('Action', 'action', sortField, sortDirection, toggleSort)}</th>
+                <th>{renderSortableHeader('User', 'userName', sortField, sortDirection, toggleSort)}</th>
+                <th>{renderSortableHeader('Source IP', 'clientIp', sortField, sortDirection, toggleSort)}</th>
+                <th>{renderSortableHeader('Method', 'requestMethod', sortField, sortDirection, toggleSort)}</th>
+                <th>{renderSortableHeader('Host', 'hostname', sortField, sortDirection, toggleSort)}</th>
+                <th>{renderSortableHeader('Category', 'urlCategory', sortField, sortDirection, toggleSort)}</th>
+                <th>{renderSortableHeader('Status', 'statusBand', sortField, sortDirection, toggleSort)}</th>
+                <th>{renderSortableHeader('Risk', 'riskLabel', sortField, sortDirection, toggleSort)}</th>
                 {tableFields.filter((field) => !PRIMARY_TABLE_FIELDS.includes(field)).map((field) => (
-                  <th key={`head-${field}`}>{getFieldLabel(field)}</th>
+                  <th key={`head-${field}`}>{renderSortableHeader(getFieldLabel(field), field, sortField, sortDirection, toggleSort)}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filteredEvents.flatMap((event) => {
+              {sortedEvents.flatMap((event) => {
                 const riskLabel = getRiskLabel(event)
                 const statusBand = getStatusBand(event.statusCode)
                 const isElevated = event.action.toLowerCase() === 'blocked' || Boolean(event.pageRisk || event.threatCategory)
@@ -373,7 +400,40 @@ export function EventsPanel({
             </tbody>
           </table>
         </div>
-      )}
+      ) : null}
     </section>
   )
+}
+
+function renderSortableHeader(
+  label: string,
+  field: SortField,
+  sortField: SortField,
+  sortDirection: SortDirection,
+  onToggle: (field: SortField) => void,
+) {
+  const isActive = sortField === field
+  return (
+    <button className={`table-sort-button ${isActive ? 'is-active' : ''}`} type="button" onClick={() => onToggle(field)}>
+      <span>{label}</span>
+      <span className="table-sort-indicator">{isActive ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}</span>
+    </button>
+  )
+}
+
+function getSortableValue(event: LogEvent, field: SortField) {
+  if (field === 'rowNumber') {
+    return event.rowNumber
+  }
+  if (field === 'eventTime') {
+    return new Date(event.eventTime).getTime()
+  }
+  return getFieldValue(event, field)
+}
+
+function compareValues(left: string | number, right: string | number) {
+  if (typeof left === 'number' && typeof right === 'number') {
+    return left - right
+  }
+  return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' })
 }

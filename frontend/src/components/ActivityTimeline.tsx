@@ -62,7 +62,8 @@ function formatBucketContext(start: string, granularity: TimelineGranularity) {
 export function ActivityTimeline({ events, selectedBucketStart, onBucketSelect }: ActivityTimelineProps) {
   const [granularity, setGranularity] = useState<TimelineGranularity>('15m')
   const [view, setView] = useState<TimelineView>('bars')
-  const palette = ['#f97316', '#14b8a6', '#8b5cf6', '#eab308', '#ec4899', '#3b82f6']
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const palette = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#1d4ed8', '#0ea5e9']
   const stepMs = GRANULARITY_OPTIONS.find((option) => option.value === granularity)?.stepMs ?? 15 * 60_000
   const bucketsByLabel = new Map<string, TimelineBucket>()
 
@@ -99,9 +100,14 @@ export function ActivityTimeline({ events, selectedBucketStart, onBucketSelect }
   return (
     <section className="panel timeline-panel">
       <div className="panel-header">
-        <div>
-          <p className="section-label">Activity profile</p>
-          <h2>Timeline</h2>
+        <div className="panel-title-group">
+          <button className="ghost-button panel-collapse-button" type="button" onClick={() => setIsCollapsed((current) => !current)}>
+            {isCollapsed ? 'Expand' : 'Collapse'}
+          </button>
+          <div>
+            <p className="section-label">Activity profile</p>
+            <h2>Timeline</h2>
+          </div>
         </div>
         <div className="widget-controls">
           <label className="mini-select">
@@ -131,7 +137,9 @@ export function ActivityTimeline({ events, selectedBucketStart, onBucketSelect }
         </div>
       </div>
 
-      {buckets.length === 0 ? (
+      {isCollapsed ? (
+        <p className="panel-note">Timeline collapsed.</p>
+      ) : buckets.length === 0 ? (
         <p className="empty-state">Load an upload to visualize request cadence.</p>
       ) : (
         <>
@@ -152,10 +160,10 @@ export function ActivityTimeline({ events, selectedBucketStart, onBucketSelect }
                 <LineChart data={buckets} margin={{ top: 10, right: 10, bottom: 10, left: 0 }}>
                   <defs>
                     <linearGradient id="timelineLineGradient" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#f97316" />
-                      <stop offset="33%" stopColor="#14b8a6" />
-                      <stop offset="66%" stopColor="#8b5cf6" />
-                      <stop offset="100%" stopColor="#ec4899" />
+                      <stop offset="0%" stopColor="#1d4ed8" />
+                      <stop offset="33%" stopColor="#2563eb" />
+                      <stop offset="66%" stopColor="#3b82f6" />
+                      <stop offset="100%" stopColor="#60a5fa" />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="rgba(148, 163, 184, 0.14)" vertical={false} />
@@ -171,7 +179,7 @@ export function ActivityTimeline({ events, selectedBucketStart, onBucketSelect }
                     stroke="url(#timelineLineGradient)"
                     strokeWidth={2.5}
                     dot={{ r: 3, strokeWidth: 0, fill: '#f8fafc' }}
-                    activeDot={{ r: 5, fill: '#ef4444' }}
+                    activeDot={{ r: 5, fill: '#93c5fd' }}
                   />
                 </LineChart>
               ) : (
@@ -190,7 +198,7 @@ export function ActivityTimeline({ events, selectedBucketStart, onBucketSelect }
                     {buckets.map((bucket) => (
                       <Cell
                         key={bucket.start}
-                        fill={selectedBucketStart === bucket.start ? '#ef4444' : palette[buckets.indexOf(bucket) % palette.length]}
+                        fill={selectedBucketStart === bucket.start ? '#93c5fd' : palette[buckets.indexOf(bucket) % palette.length]}
                       />
                     ))}
                     <LabelList dataKey="count" position="top" fill="#f8fafc" fontSize={11} />

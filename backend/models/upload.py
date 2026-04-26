@@ -13,6 +13,7 @@ from models.upload_status import UploadStatus
 
 if TYPE_CHECKING:
     from models.log_event import LogEvent
+    from models.upload_insight import UploadInsight
     from models.user import User
 
 
@@ -48,6 +49,12 @@ class Upload(db.Model):
         passive_deletes=True,
     )
     user: Mapped["User"] = relationship(back_populates="uploads")
+    upload_insight: Mapped["UploadInsight | None"] = relationship(
+        back_populates="upload",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
 
     def to_dict(self) -> dict[str, object]:
         return {

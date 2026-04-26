@@ -70,3 +70,59 @@ export type UploadsResponse = {
     total: number
   }
 }
+
+export type InsightItem = {
+  label: string
+  value: number
+  share: number
+  pivotField?: string | null
+  pivotValue?: string | null
+}
+
+export type InsightSection = {
+  id: string
+  title: string
+  description: string
+  fieldKey?: string | null
+  pivotField?: string | null
+  items: InsightItem[]
+}
+
+export type InsightFinding = {
+  title: string
+  detail: string
+  severity: 'low' | 'medium' | 'high'
+  pivotField?: string | null
+  pivotValue?: string | null
+  timeRangeStart?: string | null
+  timeRangeEnd?: string | null
+}
+
+export type InsightSpotlightCard = {
+  id: string
+  title: string
+  value: string
+  context: string
+  severity: 'low' | 'medium' | 'high'
+  pivotField?: string | null
+  pivotValue?: string | null
+  timeRangeStart?: string | null
+  timeRangeEnd?: string | null
+}
+
+export type UploadInsights = {
+  uploadId: string
+  analysisVersion: number
+  summary: Record<string, number>
+  spotlightCards: InsightSpotlightCard[]
+  keyFindings: InsightFinding[]
+  focusSections: InsightSection[]
+  fieldDistributions: InsightSection[]
+  generatedAt: string
+  updatedAt: string
+}
+
+export type UploadInsightsResponse = {
+  upload: Upload
+  insights: UploadInsights
+}

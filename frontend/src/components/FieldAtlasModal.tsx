@@ -1,215 +1,189 @@
-import { getFieldLabel, getStatusBand, type PivotCondition, type PivotField } from '../eventFields'
-import type { LogEvent } from '../types'
+import { useEffect, useState } from 'react'
+
+import type { PivotField } from '../eventFields'
+import type { InsightFinding, UploadInsights, UploadInsightsResponse } from '../types'
 
 type FieldAtlasModalProps = {
-  events: LogEvent[]
-  pivots: PivotCondition[]
+  uploadId: string | null
   onClose: () => void
-  onAddWidget: (field: PivotField) => void
   onAddPivot: (field: PivotField, value: string) => void
-  onRemovePivot: (field: PivotField, value: string) => void
+  onAddTimePivot: (start: string, end: string) => void
 }
 
-const ATLAS_PALETTE = ['#f97316', '#14b8a6', '#8b5cf6', '#eab308', '#ec4899', '#3b82f6', '#22c55e', '#ef4444']
-const RAW_FIELD_KEYS = [
-  'datetime',
-  'reason',
-  'event_id',
-  'protocol',
-  'action',
-  'transactionsize',
-  'responsesize',
-  'requestsize',
-  'ClientIP',
-  'appclass',
-  'appname',
-  'bwthrottle',
-  'clientpublicIP',
-  'contenttype',
-  'department',
-  'devicehostname',
-  'deviceowner',
-  'dlpdictionaries',
-  'dlpengine',
-  'fileclass',
-  'filetype',
-  'hostname',
-  'keyprotectiontype',
-  'location',
-  'pagerisk',
-  'product',
-  'refererURL',
-  'requestmethod',
-  'serverip',
-  'status',
-  'threatcategory',
-  'threatclass',
-  'threatname',
-  'unscannabletype',
-  'url',
-  'urlcategory',
-  'urlclass',
-  'urlsupercategory',
-  'user',
-  'useragent',
-  'vendor',
-] as const
-
-const RAW_KEY_TO_PIVOT_FIELD: Partial<Record<(typeof RAW_FIELD_KEYS)[number], PivotField>> = {
-  protocol: 'protocol',
-  action: 'action',
-  ClientIP: 'clientIp',
-  appclass: 'appClass',
-  appname: 'appName',
-  department: 'department',
-  filetype: 'fileType',
-  hostname: 'hostname',
-  location: 'location',
-  pagerisk: 'riskLabel',
-  requestmethod: 'requestMethod',
-  threatcategory: 'threatCategory',
-  threatclass: 'threatClass',
-  threatname: 'threatName',
-  urlcategory: 'urlCategory',
-  urlclass: 'urlClass',
-  urlsupercategory: 'urlSupercategory',
-  user: 'userName',
-  useragent: 'userAgent',
-  serverip: 'serverIp',
-}
-
-type AtlasFieldDefinition =
-  | { kind: 'raw'; key: (typeof RAW_FIELD_KEYS)[number]; label: string; pivotField?: PivotField }
-  | { kind: 'derived'; key: 'statusBand'; label: string; pivotField: PivotField }
-
-const ATLAS_FIELDS: AtlasFieldDefinition[] = [
-  ...RAW_FIELD_KEYS.map((key) => ({
-    kind: 'raw' as const,
-    key,
-    label: key,
-    pivotField: RAW_KEY_TO_PIVOT_FIELD[key],
-  })),
-  { kind: 'derived', key: 'statusBand', label: 'status band', pivotField: 'statusBand' },
-]
-
-function buildAtlasDistribution(events: LogEvent[], field: AtlasFieldDefinition) {
-  const counts = new Map<string, number>()
-
-  for (const event of events) {
-    const value =
-      field.kind === 'raw'
-        ? event.rawEvent?.[field.key] || 'Unknown'
-        : getStatusBand(event.statusCode)
-
-    counts.set(value, (counts.get(value) ?? 0) + 1)
-  }
-
-  return [...counts.entries()]
-    .map(([label, value]) => ({ label, value, share: events.length === 0 ? 0 : value / events.length }))
-    .sort((left, right) => right.value - left.value)
-    .slice(0, 5)
-}
-
-export function FieldAtlasModal({
-  events,
-  pivots,
-  onClose,
-  onAddWidget,
+function FindingCard({
+  finding,
   onAddPivot,
-  onRemovePivot,
-}: FieldAtlasModalProps) {
+  onAddTimePivot,
+}: {
+  finding: InsightFinding
+  onAddPivot: (field: PivotField, value: string) => void
+  onAddTimePivot: (start: string, end: string) => void
+}) {
+  return (
+    <article className={`finding-card finding-${finding.severity}`}>
+      <div className="finding-card-header">
+        <span className="metric-label">{finding.severity} priority</span>
+        {finding.timeRangeStart && finding.timeRangeEnd ? (
+          <button className="ghost-button" type="button" onClick={() => onAddTimePivot(finding.timeRangeStart!, finding.timeRangeEnd!)}>
+            Time pivot
+          </button>
+        ) : finding.pivotField && finding.pivotValue ? (
+          <button className="ghost-button" type="button" onClick={() => onAddPivot(finding.pivotField as PivotField, finding.pivotValue!)}>
+            Pivot
+          </button>
+        ) : null}
+      </div>
+      <h3>{finding.title}</h3>
+      <p>{finding.detail}</p>
+    </article>
+  )
+}
+
+export function FieldAtlasModal({ uploadId, onClose, onAddPivot, onAddTimePivot }: FieldAtlasModalProps) {
+  const [insights, setInsights] = useState<UploadInsights | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!uploadId) {
+      return
+    }
+
+    let isMounted = true
+    void fetch(`/api/uploads/${uploadId}/insights`)
+      .then(async (response) => {
+        const payload = (await response.json()) as UploadInsightsResponse | { error?: string }
+        if (!response.ok || !('insights' in payload)) {
+          throw new Error(('error' in payload && payload.error) || 'Failed to load insights')
+        }
+        if (isMounted) {
+          setInsights(payload.insights)
+          setError(null)
+        }
+      })
+      .catch((fetchError: unknown) => {
+        if (isMounted) {
+          setInsights(null)
+          setError(fetchError instanceof Error ? fetchError.message : 'Failed to load insights')
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [uploadId])
+
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <section
-        className="modal-surface atlas-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="All column analysis"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <section className="modal-surface atlas-modal" role="dialog" aria-modal="true" aria-label="SOC insights" onClick={(event) => event.stopPropagation()}>
         <div className="panel-header">
           <div>
-            <p className="section-label">Field atlas</p>
-            <h2>Every column analysis</h2>
+            <p className="section-label">Stored analysis</p>
+            <h2>SOC Insights</h2>
           </div>
           <div className="panel-actions">
-            <span className="panel-note">{ATLAS_FIELDS.length} fields</span>
+            {insights ? <span className="panel-note">Generated {new Date(insights.generatedAt).toLocaleString()}</span> : null}
             <button className="ghost-button" type="button" onClick={onClose}>
               Close
             </button>
           </div>
         </div>
 
-        <div className="atlas-grid">
-          {ATLAS_FIELDS.map((field) => {
-            const items = buildAtlasDistribution(events, field)
-            const fieldTitle = field.kind === 'raw' ? field.label : getFieldLabel(field.pivotField)
-            return (
-              <article key={field.key} className="atlas-card">
-                <div className="atlas-card-header">
-                  <div>
-                    <p className="metric-label">{field.kind === 'raw' ? 'Raw column' : 'Derived field'}</p>
-                    <h3>{fieldTitle}</h3>
-                  </div>
-                  {field.pivotField ? (
-                    <button className="ghost-button" type="button" onClick={() => onAddWidget(field.pivotField!)}>
-                      Add widget
-                    </button>
-                  ) : (
-                    <span className="panel-note">Inspect only</span>
-                  )}
+        {isLoading ? <p className="empty-state">Loading persisted insights...</p> : null}
+        {error ? <p className="error-text">{error}</p> : null}
+
+        {insights ? (
+          <div className="atlas-layout">
+            <section className="atlas-section">
+              <div className="atlas-spotlight-grid">
+                {insights.spotlightCards.map((card) => (
+                  <article key={card.id} className={`spotlight-card spotlight-${card.severity}`}>
+                    <span className="metric-label">{card.title}</span>
+                    <strong>{card.value}</strong>
+                    <p>{card.context}</p>
+                    {card.timeRangeStart && card.timeRangeEnd ? (
+                      <button className="ghost-button" type="button" onClick={() => onAddTimePivot(card.timeRangeStart!, card.timeRangeEnd!)}>
+                        Time pivot
+                      </button>
+                    ) : card.pivotField && card.pivotValue ? (
+                      <button className="ghost-button" type="button" onClick={() => onAddPivot(card.pivotField as PivotField, card.pivotValue!)}>
+                        Pivot
+                      </button>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="atlas-section">
+              <div className="atlas-section-header">
+                <div>
+                  <p className="section-label">Key findings</p>
+                  <h3>What to investigate first</h3>
                 </div>
-                {items.length === 0 ? (
-                  <p className="empty-state">No values on current view.</p>
-                ) : (
-                  <div className="atlas-list">
-                    {items.map((item, index) => {
-                      const isActive = field.pivotField
-                        ? pivots.some((pivot) => pivot.field === field.pivotField && pivot.value === item.label)
-                        : false
-                      return (
+              </div>
+              <div className="findings-grid">
+                {insights.keyFindings.map((finding, index) => (
+                  <FindingCard key={`${finding.title}-${index}`} finding={finding} onAddPivot={onAddPivot} onAddTimePivot={onAddTimePivot} />
+                ))}
+              </div>
+            </section>
+
+            <section className="atlas-section">
+              <div className="atlas-section-header">
+                <div>
+                  <p className="section-label">Curated sections</p>
+                  <h3>Analyst-first summaries</h3>
+                </div>
+              </div>
+              <div className="atlas-grid">
+                {insights.focusSections.map((section) => (
+                  <article key={section.id} className="atlas-card">
+                    <div className="atlas-card-header">
+                      <div>
+                        <p className="metric-label">Insight section</p>
+                        <h3>{section.title}</h3>
+                        <p className="panel-note">{section.description}</p>
+                      </div>
+                    </div>
+                    <div className="atlas-list">
+                      {section.items.map((item, index) => (
                         <button
-                          key={`${field.key}-${item.label}`}
-                          className={`atlas-row ${isActive ? 'is-active' : ''}${field.pivotField ? '' : ' is-readonly'}`}
+                          key={`${section.id}-${item.label}`}
+                          className="atlas-row"
                           type="button"
                           onClick={() => {
-                            if (!field.pivotField) {
-                              return
+                            if (section.pivotField) {
+                              onAddPivot(section.pivotField as PivotField, item.label)
                             }
-                            if (isActive) {
-                              onRemovePivot(field.pivotField, item.label)
-                              return
-                            }
-                            onAddPivot(field.pivotField, item.label)
                           }}
                         >
                           <div className="atlas-row-head">
-                            <span className="atlas-swatch" style={{ background: ATLAS_PALETTE[index % ATLAS_PALETTE.length] }} />
+                            <span className={`atlas-swatch atlas-swatch-${index % 6}`} />
                             <strong className="overflow-slider">{item.label}</strong>
                             <span>{Math.round(item.share * 100)}%</span>
                           </div>
                           <div className="atlas-bar-track">
-                            <div
-                              className="atlas-bar-fill"
-                              style={{
-                                width: `${item.share * 100}%`,
-                                background: ATLAS_PALETTE[index % ATLAS_PALETTE.length],
-                              }}
-                            />
+                            <div className={`atlas-bar-fill atlas-bar-fill-${index % 6}`} style={{ width: `${item.share * 100}%` }} />
                           </div>
                           <div className="atlas-meta">
                             <span>{item.value} events</span>
-                            <span>{field.pivotField ? (isActive ? 'Pivot active' : 'Pivot value') : 'Reference only'}</span>
+                            <span>{section.pivotField ? 'Pivot value' : 'Reference only'}</span>
                           </div>
                         </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </article>
-            )
-          })}
-        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+        ) : null}
       </section>
     </div>
   )

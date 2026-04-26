@@ -1,8 +1,11 @@
+import { useState } from 'react'
+
 import { buildDistribution, EVENT_FIELD_OPTIONS, getFieldLabel, type PivotCondition, type PivotField } from '../eventFields'
 import {
   Bar,
   BarChart,
   Cell,
+  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -22,7 +25,7 @@ type EventInsightsProps = {
   events: LogEvent[]
   widgets: InsightWidget[]
   pivots: PivotCondition[]
-  onOpenAtlas: () => void
+  onOpenFieldAtlas: () => void
   onFieldChange: (widgetId: string, field: PivotField) => void
   onViewChange: (widgetId: string, view: 'bars' | 'pie') => void
   onRemoveWidget: (widgetId: string) => void
@@ -55,7 +58,7 @@ function PieWidget({
   onAddPivot: (field: PivotField, value: string) => void
   onRemovePivot: (field: PivotField, value: string) => void
 }) {
-  const palette = ['#f97316', '#14b8a6', '#8b5cf6', '#eab308', '#ec4899', '#3b82f6', '#22c55e', '#ef4444']
+  const palette = ['#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#0ea5e9', '#38bdf8', '#bfdbfe']
 
   return (
     <div className="pie-widget">
@@ -109,7 +112,7 @@ function InsightCard({
 }: InsightCardProps) {
   const items = buildDistribution(events, widget.field)
   const maxValue = items.reduce((current, item) => Math.max(current, item.value), 1)
-  const palette = ['#f97316', '#14b8a6', '#8b5cf6', '#eab308', '#ec4899', '#3b82f6', '#22c55e', '#ef4444']
+  const palette = ['#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#0ea5e9', '#38bdf8', '#bfdbfe']
 
   return (
     <article className="insight-card">
@@ -169,6 +172,7 @@ function InsightCard({
                 {items.map((item, index) => (
                   <Cell key={`${widget.id}-bar-${item.label}`} fill={palette[index % palette.length]} />
                 ))}
+                <LabelList content={(props) => renderInlineBarLabel(props as unknown as Record<string, unknown>)} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -218,7 +222,7 @@ export function EventInsights({
   events,
   widgets,
   pivots,
-  onOpenAtlas,
+  onOpenFieldAtlas,
   onFieldChange,
   onViewChange,
   onRemoveWidget,
@@ -226,15 +230,21 @@ export function EventInsights({
   onAddPivot,
   onRemovePivot,
 }: EventInsightsProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false)
   return (
     <section className="panel insights-panel">
       <div className="panel-header">
-        <div>
-          <p className="section-label">Top values</p>
-          <h2>Configurable pivots</h2>
+        <div className="panel-title-group">
+          <button className="ghost-button panel-collapse-button" type="button" onClick={() => setIsCollapsed((current) => !current)}>
+            {isCollapsed ? 'Expand' : 'Collapse'}
+          </button>
+          <div>
+            <p className="section-label">Top values</p>
+            <h2>Configurable pivots</h2>
+          </div>
         </div>
         <div className="panel-actions">
-          <button className="ghost-button" type="button" onClick={onOpenAtlas}>
+          <button className="ghost-button" type="button" onClick={onOpenFieldAtlas}>
             See every column
           </button>
           <label className="mini-select">
@@ -261,21 +271,46 @@ export function EventInsights({
         </div>
       </div>
 
-      <div className="insight-grid">
-        {widgets.map((widget) => (
-          <InsightCard
-            key={widget.id}
-            widget={widget}
-            events={events}
-            pivots={pivots}
-            onFieldChange={onFieldChange}
-            onViewChange={onViewChange}
-            onRemoveWidget={onRemoveWidget}
-            onAddPivot={onAddPivot}
-            onRemovePivot={onRemovePivot}
-          />
-        ))}
-      </div>
+      {isCollapsed ? (
+        <p className="panel-note">Widget analysis collapsed.</p>
+      ) : (
+        <div className="insight-grid">
+          {widgets.map((widget) => (
+            <InsightCard
+              key={widget.id}
+              widget={widget}
+              events={events}
+              pivots={pivots}
+              onFieldChange={onFieldChange}
+              onViewChange={onViewChange}
+              onRemoveWidget={onRemoveWidget}
+              onAddPivot={onAddPivot}
+              onRemovePivot={onRemovePivot}
+            />
+          ))}
+        </div>
+      )}
     </section>
+  )
+}
+
+function renderInlineBarLabel(props: Record<string, unknown>) {
+  const value = props.value ?? ''
+  const payload = (props.payload ?? {}) as { label?: string }
+  const x = Number(props.x ?? 0)
+  const y = Number(props.y ?? 0)
+  const width = Number(props.width ?? 0)
+  const height = Number(props.height ?? 0)
+  const label = payload?.label ?? ''
+  const text = `${label} · ${value}`
+  const fitsInside = width >= Math.max(120, text.length * 6.2)
+  const textX = fitsInside ? x + width - 8 : x + width + 8
+  const anchor = fitsInside ? 'end' : 'start'
+  const fill = fitsInside ? '#eff6ff' : '#cbd5e1'
+
+  return (
+    <text x={textX} y={y + height / 2 + 4} fill={fill} fontSize={11} textAnchor={anchor}>
+      {text}
+    </text>
   )
 }
