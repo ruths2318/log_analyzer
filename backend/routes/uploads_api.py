@@ -6,8 +6,8 @@ from flask import Blueprint, abort, jsonify, request
 
 from auth import get_current_user, login_required, require_upload_access
 from db import db
-from models import LogEvent, Upload, UploadInsight
-from routes.uploads import create_upload_record
+from models import LogEvent, Upload, UploadAnomaly, UploadInsight
+from routes.uploads import create_upload_record, run_post_parse_analysis
 
 
 uploads_blueprint = Blueprint("uploads", __name__, url_prefix="/api/uploads")
@@ -87,8 +87,57 @@ def get_upload_insights(upload_id: str):
 
     insight = UploadInsight.query.filter_by(upload_id=upload.id).first()
     if insight is None:
-        return jsonify({"error": "insights are not available for this upload"}), 404
+        if upload.insights_status in {"pending", "running"}:
+            return jsonify({"upload": upload.to_dict(), "status": upload.insights_status, "error": upload.insights_error_message}), 202
+        if upload.insights_status == "failed":
+            return jsonify({"upload": upload.to_dict(), "status": upload.insights_status, "error": upload.insights_error_message}), 409
+        return jsonify({"upload": upload.to_dict(), "status": upload.insights_status, "error": "insights are not available for this upload"}), 404
     return jsonify({"upload": upload.to_dict(), "insights": insight.to_dict()})
+
+
+@uploads_blueprint.get("/<upload_id>/anomalies")
+@login_required
+def get_upload_anomalies(upload_id: str):
+    current_user = get_current_user()
+    assert current_user is not None
+    upload = get_upload_or_404(upload_id)
+    require_upload_access(upload, current_user)
+
+    anomalies = UploadAnomaly.query.filter_by(upload_id=upload.id).order_by(UploadAnomaly.confidence_score.desc()).all()
+    if not anomalies:
+        if upload.anomalies_status in {"pending", "running"}:
+            return jsonify({"upload": upload.to_dict(), "status": upload.anomalies_status, "error": upload.anomalies_error_message}), 202
+        if upload.anomalies_status == "failed":
+            return jsonify({"upload": upload.to_dict(), "status": upload.anomalies_status, "error": upload.anomalies_error_message}), 409
+    return jsonify({"upload": upload.to_dict(), "anomalies": [anomaly.to_dict() for anomaly in anomalies]})
+
+
+@uploads_blueprint.post("/<upload_id>/insights/regenerate")
+@login_required
+def regenerate_upload_insights(upload_id: str):
+    current_user = get_current_user()
+    assert current_user is not None
+    upload = get_upload_or_404(upload_id)
+    require_upload_access(upload, current_user)
+    refreshed = run_post_parse_analysis(upload.id, include_insights=True, include_anomalies=False)
+    insight = UploadInsight.query.filter_by(upload_id=upload.id).first()
+    if refreshed is None or insight is None:
+        return jsonify({"upload": upload.to_dict(), "error": "insights regeneration failed"}), 500
+    return jsonify({"upload": refreshed.to_dict(), "insights": insight.to_dict()})
+
+
+@uploads_blueprint.post("/<upload_id>/anomalies/regenerate")
+@login_required
+def regenerate_upload_anomalies(upload_id: str):
+    current_user = get_current_user()
+    assert current_user is not None
+    upload = get_upload_or_404(upload_id)
+    require_upload_access(upload, current_user)
+    refreshed = run_post_parse_analysis(upload.id, include_insights=False, include_anomalies=True)
+    if refreshed is None:
+        return jsonify({"upload": upload.to_dict(), "error": "anomaly regeneration failed"}), 500
+    anomalies = UploadAnomaly.query.filter_by(upload_id=upload.id).order_by(UploadAnomaly.confidence_score.desc()).all()
+    return jsonify({"upload": refreshed.to_dict(), "anomalies": [anomaly.to_dict() for anomaly in anomalies]})
 
 
 @uploads_blueprint.post("")

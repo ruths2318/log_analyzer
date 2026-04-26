@@ -2,20 +2,13 @@ from __future__ import annotations
 
 from sqlalchemy import inspect, text
 
-from app import create_app
 from db import db
-import models  # noqa: F401
 
 
-def main() -> int:
-    app = create_app()
-    with app.app_context():
-        db.create_all()
-        ensure_upload_user_column()
-        ensure_upload_analysis_columns()
-
-    print("database schema initialized")
-    return 0
+def ensure_database_schema() -> None:
+    db.create_all()
+    ensure_upload_user_column()
+    ensure_upload_analysis_columns()
 
 
 def ensure_upload_user_column() -> None:
@@ -49,7 +42,3 @@ def ensure_upload_analysis_columns() -> None:
         for column_name, statement in alterations:
             if column_name not in upload_columns:
                 connection.execute(text(statement))
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -7,6 +7,10 @@ export type Upload = {
   fileSizeBytes: number
   status: string
   errorMessage: string | null
+  insightsStatus: string
+  anomaliesStatus: string
+  insightsErrorMessage: string | null
+  anomaliesErrorMessage: string | null
   createdAt: string
   updatedAt: string
   eventCount: number
@@ -125,4 +129,39 @@ export type UploadInsights = {
 export type UploadInsightsResponse = {
   upload: Upload
   insights: UploadInsights
+}
+
+export type UploadInsightsPendingResponse = {
+  upload: Upload
+  status: string
+  error?: string | null
+}
+
+export type UploadAnomaly = {
+  id: string
+  uploadId: string
+  eventId: string | null
+  rowNumber: number | null
+  anomalyType: string
+  title: string
+  reason: string
+  confidenceScore: number
+  severity: 'low' | 'medium' | 'high'
+  groupKey: string | null
+  timeRangeStart: string | null
+  timeRangeEnd: string | null
+  context: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export type UploadAnomaliesResponse = {
+  upload: Upload
+  anomalies: UploadAnomaly[]
+}
+
+export type UploadAnomaliesPendingResponse = {
+  upload: Upload
+  status: string
+  error?: string | null
 }

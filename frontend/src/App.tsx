@@ -2,6 +2,7 @@ import { startTransition, useDeferredValue, useEffect, useState } from 'react'
 
 import './App.css'
 import { ActivityTimeline } from './components/ActivityTimeline'
+import { AnomaliesOverview } from './components/AnomaliesOverview'
 import { FieldAtlasModal } from './components/FieldAtlasModal'
 import { EventsPanel } from './components/EventsPanel'
 import { EventInsights } from './components/EventInsights'
@@ -454,6 +455,12 @@ function App() {
             key={selectedUploadId ?? 'no-upload'}
             uploadId={selectedUploadId}
             onOpenInsightsModal={() => setIsInsightsModalOpen(true)}
+            onAddPivot={addPivot}
+            onAddTimePivot={(start, end) => setTimeRangePivot({ start, end })}
+          />
+          <AnomaliesOverview
+            key={`anomalies-${selectedUploadId ?? 'no-upload'}`}
+            uploadId={selectedUploadId}
             onAddPivot={addPivot}
             onAddTimePivot={(start, end) => setTimeRangePivot({ start, end })}
           />

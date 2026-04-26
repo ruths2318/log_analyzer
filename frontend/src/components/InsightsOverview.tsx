@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import type { PivotField } from '../eventFields'
-import type { UploadInsights, UploadInsightsResponse } from '../types'
+import { useUploadInsights } from '../hooks/useUploadAnalysis'
 
 type InsightsOverviewProps = {
   uploadId: string | null
@@ -11,49 +11,14 @@ type InsightsOverviewProps = {
 }
 
 export function InsightsOverview({ uploadId, onOpenInsightsModal, onAddPivot, onAddTimePivot }: InsightsOverviewProps) {
-  const [insights, setInsights] = useState<UploadInsights | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [isCollapsed, setIsCollapsed] = useState(false)
-
-  useEffect(() => {
-    if (!uploadId) {
-      return
-    }
-
-    let isMounted = true
-
-    void fetch(`/api/uploads/${uploadId}/insights`)
-      .then(async (response) => {
-        const payload = (await response.json()) as UploadInsightsResponse | { error?: string }
-        if (!response.ok || !('insights' in payload)) {
-          throw new Error(('error' in payload && payload.error) || 'Failed to load insights')
-        }
-        if (isMounted) {
-          setInsights(payload.insights)
-          setError(null)
-        }
-      })
-      .catch((fetchError: unknown) => {
-        if (isMounted) {
-          setInsights(null)
-          setError(fetchError instanceof Error ? fetchError.message : 'Failed to load insights')
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [uploadId])
+  const { data: insights, status, isLoading, isRegenerating, error, regenerate } = useUploadInsights(uploadId)
 
   if (!uploadId) {
     return null
   }
+
+  const isPending = status === 'pending' || status === 'running'
 
   return (
     <section className="panel insights-overview-panel">
@@ -69,6 +34,9 @@ export function InsightsOverview({ uploadId, onOpenInsightsModal, onAddPivot, on
         </div>
         <div className="panel-actions">
           {insights ? <span className="panel-note">Updated {new Date(insights.updatedAt).toLocaleString()}</span> : null}
+          <button className="ghost-button" type="button" onClick={() => void regenerate()} disabled={isRegenerating}>
+            {isRegenerating ? 'Regenerating…' : 'Regenerate insights'}
+          </button>
           <button className="ghost-button" type="button" onClick={onOpenInsightsModal}>
             Open insights modal
           </button>
@@ -76,8 +44,14 @@ export function InsightsOverview({ uploadId, onOpenInsightsModal, onAddPivot, on
       </div>
 
       {isCollapsed ? <p className="panel-note">Insights overview collapsed.</p> : null}
-      {!isCollapsed && isLoading ? <p className="empty-state">Loading stored insights...</p> : null}
-      {error ? <p className="error-text">{error}</p> : null}
+      {!isCollapsed && isLoading && !insights ? <p className="empty-state">Checking stored insights...</p> : null}
+      {!isCollapsed && isPending ? (
+        <div className="analysis-status-card">
+          <strong>Insights are {status}.</strong>
+          <p>Events are already available. This upload is still computing analyst summaries in the background.</p>
+        </div>
+      ) : null}
+      {!isCollapsed && error && status === 'failed' ? <p className="error-text">{error}</p> : null}
 
       {!isCollapsed && insights ? (
         <div className="insights-overview-grid">

@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
-
 import type { PivotField } from '../eventFields'
-import type { InsightFinding, UploadInsights, UploadInsightsResponse } from '../types'
+import { useUploadInsights } from '../hooks/useUploadAnalysis'
+import type { InsightFinding } from '../types'
 
 type FieldAtlasModalProps = {
   uploadId: string | null
@@ -40,43 +39,8 @@ function FindingCard({
 }
 
 export function FieldAtlasModal({ uploadId, onClose, onAddPivot, onAddTimePivot }: FieldAtlasModalProps) {
-  const [insights, setInsights] = useState<UploadInsights | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!uploadId) {
-      return
-    }
-
-    let isMounted = true
-    void fetch(`/api/uploads/${uploadId}/insights`)
-      .then(async (response) => {
-        const payload = (await response.json()) as UploadInsightsResponse | { error?: string }
-        if (!response.ok || !('insights' in payload)) {
-          throw new Error(('error' in payload && payload.error) || 'Failed to load insights')
-        }
-        if (isMounted) {
-          setInsights(payload.insights)
-          setError(null)
-        }
-      })
-      .catch((fetchError: unknown) => {
-        if (isMounted) {
-          setInsights(null)
-          setError(fetchError instanceof Error ? fetchError.message : 'Failed to load insights')
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [uploadId])
+  const { data: insights, status, isLoading, isRegenerating, error, regenerate } = useUploadInsights(uploadId)
+  const isPending = status === 'pending' || status === 'running'
 
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
@@ -88,14 +52,23 @@ export function FieldAtlasModal({ uploadId, onClose, onAddPivot, onAddTimePivot 
           </div>
           <div className="panel-actions">
             {insights ? <span className="panel-note">Generated {new Date(insights.generatedAt).toLocaleString()}</span> : null}
+            <button className="ghost-button" type="button" onClick={() => void regenerate()} disabled={isRegenerating}>
+              {isRegenerating ? 'Regenerating…' : 'Regenerate insights'}
+            </button>
             <button className="ghost-button" type="button" onClick={onClose}>
               Close
             </button>
           </div>
         </div>
 
-        {isLoading ? <p className="empty-state">Loading persisted insights...</p> : null}
-        {error ? <p className="error-text">{error}</p> : null}
+        {isLoading && !insights ? <p className="empty-state">Loading persisted insights...</p> : null}
+        {isPending ? (
+          <div className="analysis-status-card">
+            <strong>Insights are {status}.</strong>
+            <p>The dashboard is polling for the persisted result. You can regenerate them immediately if needed.</p>
+          </div>
+        ) : null}
+        {error && status === 'failed' ? <p className="error-text">{error}</p> : null}
 
         {insights ? (
           <div className="atlas-layout">
