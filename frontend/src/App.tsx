@@ -1,13 +1,65 @@
-import { useEffect } from 'react'
+import { startTransition, useDeferredValue, useEffect, useState } from 'react'
 
 import './App.css'
+import { ActivityTimeline } from './components/ActivityTimeline'
+import { FieldAtlasModal } from './components/FieldAtlasModal'
 import { EventsPanel } from './components/EventsPanel'
+import { EventInsights } from './components/EventInsights'
 import { LoginPanel } from './components/LoginPanel'
 import { SummaryGrid } from './components/SummaryGrid'
 import { UploadPanel } from './components/UploadPanel'
 import { UploadsPanel } from './components/UploadsPanel'
 import { UsersPanel } from './components/UsersPanel'
-import { EVENT_PAGE_SIZE, UPLOAD_PAGE_SIZE, useLogAnalyzerStore } from './store/useLogAnalyzerStore'
+import { getFieldLabel, getRiskLabel, getStatusBand, matchesPivot, type PivotCondition, type PivotField } from './eventFields'
+import { DEFAULT_EVENT_PAGE_SIZE, UPLOAD_PAGE_SIZE, useLogAnalyzerStore } from './store/useLogAnalyzerStore'
+import type { LogEvent } from './types'
+
+function matchesEvent(event: LogEvent, query: string) {
+  if (!query) {
+    return true
+  }
+
+  const haystack = [
+    event.action,
+    event.userName,
+    event.clientIp,
+    event.hostname,
+    event.url,
+    event.urlCategory,
+    event.pageRisk,
+    event.threatCategory,
+    event.protocol,
+    event.requestMethod,
+    event.statusCode?.toString(),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  return haystack.includes(query)
+}
+
+function getSortedOptions(values: string[], fallbackLabel: string) {
+  return [fallbackLabel, ...values.filter((value) => value !== fallbackLabel).sort((left, right) => left.localeCompare(right))]
+}
+
+const EVENT_PAGE_SIZE_OPTIONS = [25, 50, 100, 500, 1000]
+type InsightWidget = {
+  id: string
+  field: PivotField
+  view: 'bars' | 'pie'
+}
+
+const DEFAULT_TABLE_FIELDS: PivotField[] = [
+  'action',
+  'userName',
+  'clientIp',
+  'requestMethod',
+  'hostname',
+  'urlCategory',
+  'statusBand',
+  'riskLabel',
+]
 
 function App() {
   const currentUser = useLogAnalyzerStore((state) => state.currentUser)
@@ -32,6 +84,7 @@ function App() {
   const usersError = useLogAnalyzerStore((state) => state.usersError)
   const isLoadingUsers = useLogAnalyzerStore((state) => state.isLoadingUsers)
   const eventOffset = useLogAnalyzerStore((state) => state.eventOffset)
+  const eventPageSize = useLogAnalyzerStore((state) => state.eventPageSize)
   const username = useLogAnalyzerStore((state) => state.username)
   const password = useLogAnalyzerStore((state) => state.password)
   const setUsername = useLogAnalyzerStore((state) => state.setUsername)
@@ -39,6 +92,7 @@ function App() {
   const setSelectedFile = useLogAnalyzerStore((state) => state.setSelectedFile)
   const setSelectedUploadId = useLogAnalyzerStore((state) => state.setSelectedUploadId)
   const setEventOffset = useLogAnalyzerStore((state) => state.setEventOffset)
+  const setEventPageSize = useLogAnalyzerStore((state) => state.setEventPageSize)
   const setUploadListOffset = useLogAnalyzerStore((state) => state.setUploadListOffset)
   const setActiveView = useLogAnalyzerStore((state) => state.setActiveView)
   const setUploadOwnerFilter = useLogAnalyzerStore((state) => state.setUploadOwnerFilter)
@@ -52,6 +106,20 @@ function App() {
   const refreshUploads = useLogAnalyzerStore((state) => state.refreshUploads)
   const loadEvents = useLogAnalyzerStore((state) => state.loadEvents)
   const uploadFile = useLogAnalyzerStore((state) => state.uploadFile)
+  const [searchInput, setSearchInput] = useState('')
+  const [actionFilter, setActionFilter] = useState('All actions')
+  const [riskFilter, setRiskFilter] = useState('All risk levels')
+  const [statusBandFilter, setStatusBandFilter] = useState('All status bands')
+  const [pivots, setPivots] = useState<PivotCondition[]>([])
+  const [insightWidgets, setInsightWidgets] = useState<InsightWidget[]>([
+    { id: 'widget-user', field: 'userName', view: 'bars' },
+    { id: 'widget-ip', field: 'clientIp', view: 'bars' },
+    { id: 'widget-host', field: 'hostname', view: 'bars' },
+  ])
+  const [isUploadListExpanded, setIsUploadListExpanded] = useState(false)
+  const [timeRangePivot, setTimeRangePivot] = useState<{ start: string; end: string } | null>(null)
+  const [tableFields, setTableFields] = useState<PivotField[]>(DEFAULT_TABLE_FIELDS)
+  const [isFieldAtlasOpen, setIsFieldAtlasOpen] = useState(false)
 
   useEffect(() => {
     void bootstrapAuth()
@@ -69,7 +137,7 @@ function App() {
       return
     }
     void loadEvents(selectedUploadId, eventOffset)
-  }, [currentUser, eventOffset, loadEvents, selectedUploadId])
+  }, [currentUser, eventOffset, eventPageSize, loadEvents, selectedUploadId])
 
   function handleUpload() {
     void uploadFile()
@@ -87,12 +155,102 @@ function App() {
     void logout()
   }
 
+  function resetWorkspaceFilters() {
+    setSearchInput('')
+    setActionFilter('All actions')
+    setRiskFilter('All risk levels')
+    setStatusBandFilter('All status bands')
+    setPivots([])
+    setInsightWidgets([
+      { id: 'widget-user', field: 'userName', view: 'bars' },
+      { id: 'widget-ip', field: 'clientIp', view: 'bars' },
+      { id: 'widget-host', field: 'hostname', view: 'bars' },
+    ])
+    setIsFieldAtlasOpen(false)
+    setTimeRangePivot(null)
+    setTableFields(DEFAULT_TABLE_FIELDS)
+  }
+
+  function addPivot(field: PivotField, value: string) {
+    setPivots((current) => {
+      if (current.some((pivot) => pivot.field === field && pivot.value === value)) {
+        return current
+      }
+      return [...current, { field, value }]
+    })
+  }
+
+  function removePivot(field: PivotField, value: string) {
+    setPivots((current) => current.filter((pivot) => !(pivot.field === field && pivot.value === value)))
+  }
+
+  function updateInsightWidgetField(widgetId: string, field: PivotField) {
+    setInsightWidgets((current) => current.map((widget) => (widget.id === widgetId ? { ...widget, field } : widget)))
+  }
+
+  function addInsightWidget(field: PivotField) {
+    setInsightWidgets((current) => [...current, { id: `${field}-${Date.now()}`, field, view: 'bars' }])
+  }
+
+  function updateInsightWidgetView(widgetId: string, view: 'bars' | 'pie') {
+    setInsightWidgets((current) => current.map((widget) => (widget.id === widgetId ? { ...widget, view } : widget)))
+  }
+
+  function removeInsightWidget(widgetId: string) {
+    setInsightWidgets((current) => (current.length > 1 ? current.filter((widget) => widget.id !== widgetId) : current))
+  }
+
+  function addTableField(field: PivotField) {
+    setTableFields((current) => (current.includes(field) ? current : [...current, field]))
+  }
+
+  const searchQuery = useDeferredValue(searchInput.trim().toLowerCase())
+
   const selectedUpload = uploads.find((upload) => upload.id === selectedUploadId) ?? eventsResponse?.upload ?? null
-  const totalPages = eventsResponse ? Math.max(1, Math.ceil(eventsResponse.pagination.total / EVENT_PAGE_SIZE)) : 1
-  const currentPage = Math.floor(eventOffset / EVENT_PAGE_SIZE) + 1
+  const totalPages = eventsResponse ? Math.max(1, Math.ceil(eventsResponse.pagination.total / eventPageSize)) : 1
+  const currentPage = Math.floor(eventOffset / eventPageSize) + 1
   const uploadTotalPages = Math.max(1, Math.ceil(uploadsTotal / UPLOAD_PAGE_SIZE))
   const uploadCurrentPage = Math.floor(uploadListOffset / UPLOAD_PAGE_SIZE) + 1
   const filteredUsers = users.filter((user) => user.username.toLowerCase().includes(userSearch.trim().toLowerCase()))
+  const visibleEvents = eventsResponse?.events ?? []
+  const actionOptions = getSortedOptions([...new Set(visibleEvents.map((event) => event.action).filter(Boolean))], 'All actions')
+  const riskOptions = getSortedOptions(
+    [...new Set(visibleEvents.map((event) => getRiskLabel(event)).filter(Boolean))],
+    'All risk levels',
+  )
+  const statusBandOptions = getSortedOptions(
+    [...new Set(visibleEvents.map((event) => getStatusBand(event.statusCode)).filter(Boolean))],
+    'All status bands',
+  )
+  const baseFilteredEvents = visibleEvents.filter((event) => {
+    if (!matchesEvent(event, searchQuery)) {
+      return false
+    }
+    if (actionFilter !== 'All actions' && event.action !== actionFilter) {
+      return false
+    }
+    if (riskFilter !== 'All risk levels' && getRiskLabel(event) !== riskFilter) {
+      return false
+    }
+    if (statusBandFilter !== 'All status bands' && getStatusBand(event.statusCode) !== statusBandFilter) {
+      return false
+    }
+    if (!pivots.every((pivot) => matchesPivot(event, pivot))) {
+      return false
+    }
+    return true
+  })
+  const filteredEvents = baseFilteredEvents.filter((event) => {
+    if (timeRangePivot) {
+      const eventTime = new Date(event.eventTime).getTime()
+      const pivotStart = new Date(timeRangePivot.start).getTime()
+      const pivotEnd = new Date(timeRangePivot.end).getTime()
+      if (eventTime < pivotStart || eventTime >= pivotEnd) {
+        return false
+      }
+    }
+    return true
+  })
 
   if (isCheckingAuth) {
     return (
@@ -154,14 +312,14 @@ function App() {
         </div>
         <div className="system-status">
           <span className="status-dot" />
-          <span>{currentUser.username}{currentUser.isAdmin ? ' · admin' : ''}</span>
+          <span className="overflow-slider">{currentUser.username}{currentUser.isAdmin ? ' · admin' : ''}</span>
           <button className="ghost-button" type="button" onClick={handleLogout}>
             Sign out
           </button>
         </div>
       </header>
 
-      <main className="layout">
+      <main className={`layout ${!isUploadListExpanded ? 'is-rail-collapsed' : ''}`}>
         <section className="left-column">
           {activeView === 'workspace' ? (
             <>
@@ -186,6 +344,7 @@ function App() {
                 onChangeOwnerFilter={undefined}
                 onRefresh={() => void refreshUploads()}
                 onSelectUpload={(uploadId) => {
+                  resetWorkspaceFilters()
                   setSelectedUploadId(uploadId)
                   setEventOffset(0)
                 }}
@@ -193,6 +352,9 @@ function App() {
                 onNextPage={() => setUploadListOffset(uploadListOffset + UPLOAD_PAGE_SIZE)}
                 canGoPrev={uploadListOffset > 0}
                 canGoNext={uploadListOffset + UPLOAD_PAGE_SIZE < uploadsTotal}
+                isCollapsed={!isUploadListExpanded}
+                onToggleCollapsed={() => setIsUploadListExpanded((value) => !value)}
+                collapsedSummary={`${uploadsTotal} files available${selectedUpload ? ` · selected ${selectedUpload.originalFilename}` : ''}.`}
               />
             </>
           ) : (
@@ -211,6 +373,7 @@ function App() {
                 onChangeOwnerFilter={(userId) => setUploadOwnerFilter(userId)}
                 onRefresh={() => void refreshUploads()}
                 onSelectUpload={(uploadId) => {
+                  resetWorkspaceFilters()
                   setSelectedUploadId(uploadId)
                   setEventOffset(0)
                 }}
@@ -218,6 +381,9 @@ function App() {
                 onNextPage={() => setUploadListOffset(uploadListOffset + UPLOAD_PAGE_SIZE)}
                 canGoPrev={uploadListOffset > 0}
                 canGoNext={uploadListOffset + UPLOAD_PAGE_SIZE < uploadsTotal}
+                isCollapsed={!isUploadListExpanded}
+                onToggleCollapsed={() => setIsUploadListExpanded((value) => !value)}
+                collapsedSummary={`${uploadsTotal} files available${selectedUpload ? ` · selected ${selectedUpload.originalFilename}` : ''}.`}
               />
               <UsersPanel
                 users={filteredUsers}
@@ -234,20 +400,174 @@ function App() {
         </section>
 
         <section className="right-column">
-          <SummaryGrid selectedUpload={selectedUpload} />
+          <section className="hero-panel workbench-strip">
+            <div className="workbench-strip-item">
+              <span className="metric-label">Dataset</span>
+              <strong>{selectedUpload?.originalFilename ?? 'No upload selected'}</strong>
+            </div>
+            <div className="workbench-strip-item workbench-strip-item-wide">
+              <span className="metric-label">Active pivots</span>
+              {pivots.length === 0 && !timeRangePivot ? (
+                <strong>None</strong>
+              ) : (
+                <div className="workbench-pivots">
+                  {pivots.map((pivot) => (
+                    <div
+                      key={`strip-${pivot.field}-${pivot.value}`}
+                      className="pivot-pill"
+                    >
+                      <span>{getFieldLabel(pivot.field)}</span>
+                      <strong>{pivot.value}</strong>
+                      <button
+                        className="pivot-remove-button"
+                        type="button"
+                        aria-label={`Remove ${getFieldLabel(pivot.field)} pivot`}
+                        onClick={() => removePivot(pivot.field, pivot.value)}
+                      >
+                        x
+                      </button>
+                    </div>
+                  ))}
+                  {timeRangePivot ? (
+                    <div className="pivot-pill">
+                      <span>Time</span>
+                      <strong>{new Date(timeRangePivot.start).toLocaleString()}</strong>
+                      <button
+                        className="pivot-remove-button"
+                        type="button"
+                        aria-label="Remove time pivot"
+                        onClick={() => setTimeRangePivot(null)}
+                      >
+                        x
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <SummaryGrid
+            selectedUpload={selectedUpload}
+            events={visibleEvents}
+            filteredEvents={filteredEvents}
+          />
+
+          <section className="panel control-panel">
+            <div className="panel-header compact-header">
+              <div>
+                <p className="section-label">Filters</p>
+                <h2>Filter current page</h2>
+              </div>
+            </div>
+            <div className="filter-toolbar">
+              <label className="filter-field">
+                <span>Search event context</span>
+                <input
+                  type="search"
+                  placeholder="IP, user, host, category, URL"
+                  value={searchInput}
+                  onChange={(event) => {
+                    const nextValue = event.target.value
+                    startTransition(() => setSearchInput(nextValue))
+                  }}
+                />
+              </label>
+              <label className="filter-field">
+                <span>Action</span>
+                <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
+                  {actionOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="filter-field">
+                <span>Risk signal</span>
+                <select value={riskFilter} onChange={(event) => setRiskFilter(event.target.value)}>
+                  {riskOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="filter-field">
+                <span>Status band</span>
+                <select value={statusBandFilter} onChange={(event) => setStatusBandFilter(event.target.value)}>
+                  {statusBandOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <div className="analytics-grid">
+            <ActivityTimeline
+              events={baseFilteredEvents}
+              selectedBucketStart={timeRangePivot?.start ?? null}
+              onBucketSelect={setTimeRangePivot}
+            />
+            <EventInsights
+              events={filteredEvents}
+              widgets={insightWidgets}
+              pivots={pivots}
+              onOpenAtlas={() => setIsFieldAtlasOpen(true)}
+              onFieldChange={updateInsightWidgetField}
+              onViewChange={updateInsightWidgetView}
+              onRemoveWidget={removeInsightWidget}
+              onAddWidget={addInsightWidget}
+              onAddPivot={addPivot}
+              onRemovePivot={removePivot}
+            />
+          </div>
+
           <EventsPanel
             eventsResponse={eventsResponse}
+            filteredEvents={filteredEvents}
             eventsError={eventsError}
             isLoadingEvents={isLoadingEvents}
             currentPage={currentPage}
             totalPages={totalPages}
             offset={eventOffset}
-            pageSize={EVENT_PAGE_SIZE}
-            onPrevPage={() => setEventOffset(Math.max(0, eventOffset - EVENT_PAGE_SIZE))}
-            onNextPage={() => setEventOffset(eventOffset + EVENT_PAGE_SIZE)}
+            pageSize={eventPageSize}
+            pageSizeOptions={EVENT_PAGE_SIZE_OPTIONS}
+            onPageSizeChange={(pageSize) =>
+              setEventPageSize(
+                EVENT_PAGE_SIZE_OPTIONS.includes(pageSize) ? pageSize : DEFAULT_EVENT_PAGE_SIZE,
+              )
+            }
+            pivots={pivots}
+            timeRangePivot={timeRangePivot}
+            tableFields={tableFields}
+            onAddPivot={addPivot}
+            onRemovePivot={removePivot}
+            onAddWidget={addInsightWidget}
+            onAddTableField={addTableField}
+            onClearTimePivot={() => setTimeRangePivot(null)}
+            onClearPivots={() => {
+              setPivots([])
+              setTimeRangePivot(null)
+            }}
+            onPrevPage={() => setEventOffset(Math.max(0, eventOffset - eventPageSize))}
+            onNextPage={() => setEventOffset(eventOffset + eventPageSize)}
           />
         </section>
       </main>
+      {isFieldAtlasOpen ? (
+        <FieldAtlasModal
+          events={filteredEvents}
+          pivots={pivots}
+          onClose={() => setIsFieldAtlasOpen(false)}
+          onAddWidget={addInsightWidget}
+          onAddPivot={addPivot}
+          onRemovePivot={removePivot}
+        />
+      ) : null}
     </div>
   )
 }

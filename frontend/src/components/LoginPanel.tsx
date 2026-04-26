@@ -22,8 +22,11 @@ export function LoginPanel({
   return (
     <main className="login-shell">
       <section className="login-panel">
-        <p className="eyebrow">Access</p>
-        <h1>Sign in</h1>
+        <p className="eyebrow">SOC Access</p>
+        <h1>Analyst login</h1>
+        <p className="login-intro">
+          Upload logs, inspect activity patterns, and prepare the case narrative from a single workspace.
+        </p>
         <div className="login-form">
           <label className="field">
             <span>Username</span>

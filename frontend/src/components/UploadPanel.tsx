@@ -22,12 +22,15 @@ export function UploadPanel({
       <div className="panel-header">
         <div>
           <p className="section-label">Ingest</p>
-          <h2>Upload Zscaler log</h2>
+          <h2>Upload telemetry</h2>
         </div>
       </div>
       <div className="upload-form">
         <label className="file-picker">
-          <span>{selectedFile ? selectedFile.name : 'Choose .log or .txt file'}</span>
+          <div className="file-picker-copy">
+            <strong>{selectedFile ? selectedFile.name : 'Drop a .log, .txt, or .csv file'}</strong>
+            <span>Parse proxy activity and open the investigation workspace.</span>
+          </div>
           <input
             ref={fileInputRef}
             type="file"

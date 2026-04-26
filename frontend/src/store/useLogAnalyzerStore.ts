@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 import type { AuthUser, EventsResponse, Upload, UploadsResponse, UserRecord } from '../types'
 
-const EVENT_PAGE_SIZE = 25
+const DEFAULT_EVENT_PAGE_SIZE = 100
 const UPLOAD_PAGE_SIZE = 12
 
 type ActiveView = 'workspace' | 'admin'
@@ -27,6 +27,7 @@ type LogAnalyzerState = {
   eventsError: string | null
   authError: string | null
   eventOffset: number
+  eventPageSize: number
   username: string
   password: string
   users: UserRecord[]
@@ -37,6 +38,7 @@ type LogAnalyzerState = {
   setSelectedFile: (file: File | null) => void
   setSelectedUploadId: (uploadId: string | null) => void
   setEventOffset: (offset: number) => void
+  setEventPageSize: (pageSize: number) => void
   setUploadListOffset: (offset: number) => void
   setActiveView: (view: ActiveView) => void
   setUploadOwnerFilter: (userId: string | null) => void
@@ -72,6 +74,7 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
   eventsError: null,
   authError: null,
   eventOffset: 0,
+  eventPageSize: DEFAULT_EVENT_PAGE_SIZE,
   username: '',
   password: '',
   users: [],
@@ -82,6 +85,7 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
   setSelectedFile: (file) => set({ selectedFile: file }),
   setSelectedUploadId: (uploadId) => set({ selectedUploadId: uploadId }),
   setEventOffset: (eventOffset) => set({ eventOffset }),
+  setEventPageSize: (eventPageSize) => set({ eventPageSize, eventOffset: 0 }),
   setUploadListOffset: (uploadListOffset) => set({ uploadListOffset }),
   setActiveView: (activeView) => set({ activeView }),
   setUploadOwnerFilter: (uploadOwnerFilter) => set({ uploadOwnerFilter, uploadListOffset: 0 }),
@@ -127,6 +131,7 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
         eventsResponse: null,
         uploadListOffset: 0,
         eventOffset: 0,
+        eventPageSize: DEFAULT_EVENT_PAGE_SIZE,
         activeView: 'workspace',
         uploadOwnerFilter: null,
       })
@@ -164,6 +169,7 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
         eventsResponse: null,
         uploadListOffset: 0,
         eventOffset: 0,
+        eventPageSize: DEFAULT_EVENT_PAGE_SIZE,
         activeView: 'workspace',
         uploadOwnerFilter: null,
       })
@@ -196,6 +202,7 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
       users: [],
       usersError: null,
       eventOffset: 0,
+      eventPageSize: DEFAULT_EVENT_PAGE_SIZE,
     })
   },
   loadUsers: async () => {
@@ -289,7 +296,8 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
     set({ isLoadingEvents: true, eventsError: null })
 
     try {
-      const response = await fetch(`/api/uploads/${uploadId}/events?limit=${EVENT_PAGE_SIZE}&offset=${nextOffset}`)
+      const { eventPageSize } = get()
+      const response = await fetch(`/api/uploads/${uploadId}/events?limit=${eventPageSize}&offset=${nextOffset}`)
       const payload = (await response.json()) as EventsResponse
 
       if (!response.ok) {
@@ -346,4 +354,4 @@ export const useLogAnalyzerStore = create<LogAnalyzerState>((set, get) => ({
   },
 }))
 
-export { EVENT_PAGE_SIZE, UPLOAD_PAGE_SIZE }
+export { DEFAULT_EVENT_PAGE_SIZE, UPLOAD_PAGE_SIZE }

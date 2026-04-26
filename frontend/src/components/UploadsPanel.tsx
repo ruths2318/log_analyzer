@@ -19,6 +19,9 @@ type UploadsPanelProps = {
   onNextPage: () => void
   canGoPrev: boolean
   canGoNext: boolean
+  isCollapsed?: boolean
+  onToggleCollapsed?: () => void
+  collapsedSummary?: string
 }
 
 export function UploadsPanel({
@@ -39,6 +42,9 @@ export function UploadsPanel({
   onNextPage,
   canGoPrev,
   canGoNext,
+  isCollapsed = false,
+  onToggleCollapsed,
+  collapsedSummary,
 }: UploadsPanelProps) {
   return (
     <section className="panel uploads-panel">
@@ -48,13 +54,20 @@ export function UploadsPanel({
           <h2>{title}</h2>
         </div>
         <div className="panel-actions">
+          {onToggleCollapsed ? (
+            <button className="ghost-button" type="button" onClick={onToggleCollapsed}>
+              {isCollapsed ? 'Show list' : 'Hide list'}
+            </button>
+          ) : null}
           <button className="ghost-button" type="button" onClick={onRefresh}>
             Refresh
           </button>
         </div>
       </div>
 
-      {onChangeOwnerFilter && ownerFilterLabel ? (
+      {isCollapsed ? <p className="panel-note">{collapsedSummary ?? `${uploadsTotal} files available.`}</p> : null}
+
+      {!isCollapsed && onChangeOwnerFilter && ownerFilterLabel ? (
         <label className="filter-field">
           <span>{ownerFilterLabel}</span>
           <select value={ownerFilterValue ?? ''} onChange={(event) => onChangeOwnerFilter(event.target.value || null)}>
@@ -68,11 +81,11 @@ export function UploadsPanel({
         </label>
       ) : null}
 
-      {isLoadingUploads ? (
+      {!isCollapsed && isLoadingUploads ? (
         <p className="empty-state">Loading uploads...</p>
-      ) : uploads.length === 0 ? (
+      ) : !isCollapsed && uploads.length === 0 ? (
         <p className="empty-state">No files uploaded yet.</p>
-      ) : (
+      ) : !isCollapsed ? (
         <div className="upload-list">
           {uploads.map((upload) => (
             <button
@@ -85,28 +98,35 @@ export function UploadsPanel({
                 <strong>{upload.originalFilename}</strong>
                 <span className={`badge badge-${upload.status}`}>{upload.status}</span>
               </div>
-              <p>{formatDateTime(upload.createdAt)}</p>
-              <p>{upload.ownerUsername ?? 'unknown owner'}</p>
-              <p>{upload.eventCount} events</p>
+              <div className="upload-card-meta">
+                <p>{formatDateTime(upload.createdAt)}</p>
+                <p>{upload.ownerUsername ?? 'unknown owner'}</p>
+              </div>
+              <div className="upload-card-stats">
+                <span>{upload.eventCount} events</span>
+                <span>Updated {formatDateTime(upload.updatedAt)}</span>
+              </div>
             </button>
           ))}
         </div>
-      )}
+      ) : null}
 
-      <div className="panel-footer">
-        <span className="footer-text">{uploadsTotal} total uploads</span>
-        <div className="pager">
-          <button className="ghost-button" type="button" disabled={!canGoPrev || isLoadingUploads} onClick={onPrevPage}>
-            Prev
-          </button>
-          <span>
-            Page {currentPage} / {totalPages}
-          </span>
-          <button className="ghost-button" type="button" disabled={!canGoNext || isLoadingUploads} onClick={onNextPage}>
-            Next
-          </button>
+      {!isCollapsed ? (
+        <div className="panel-footer">
+          <span className="footer-text">{uploadsTotal} total uploads</span>
+          <div className="pager">
+            <button className="ghost-button" type="button" disabled={!canGoPrev || isLoadingUploads} onClick={onPrevPage}>
+              Prev
+            </button>
+            <span>
+              Page {currentPage} / {totalPages}
+            </span>
+            <button className="ghost-button" type="button" disabled={!canGoNext || isLoadingUploads} onClick={onNextPage}>
+              Next
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
     </section>
   )
 }
