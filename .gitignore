@@ -4,3 +4,4 @@
 .env
 backend/.env
 uploads/
+backend/log_analyzer.pem
