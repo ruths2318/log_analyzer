@@ -294,13 +294,13 @@ Key backend environment values:
 - `OPENAI_VIEWS_MAX_OUTPUT_TOKENS`
 - `OPENAI_ANOMALY_MAX_OUTPUT_TOKENS`
 
-See [backend/.env.example](/home/rmeedima/log_analyzer/backend/.env.example).
+See [backend/.env.example](backend/.env.example).
 
 ## Example Test Data
 
 Included example file:
 
-- [data/synthetic_zscaler_web.log](/home/rmeedima/log_analyzer/data/synthetic_zscaler_web.log)
+- [data/synthetic_zscaler_web.log](data/synthetic_zscaler_web.log)
 
 This file can be uploaded directly through the UI for testing the end-to-end flow.
 
