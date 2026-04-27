@@ -5,6 +5,7 @@ from flask import Flask
 from config import load_config
 from db import db
 from routes import api_blueprint, auth_blueprint, uploads_blueprint, users_blueprint
+from schema_sync import ensure_database_schema
 
 
 def create_app() -> Flask:
@@ -19,6 +20,8 @@ def create_app() -> Flask:
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     db.init_app(app)
+    with app.app_context():
+        ensure_database_schema()
     app.register_blueprint(api_blueprint)
     app.register_blueprint(auth_blueprint)
     app.register_blueprint(uploads_blueprint)

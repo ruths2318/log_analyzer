@@ -9,6 +9,7 @@ def ensure_database_schema() -> None:
     db.create_all()
     ensure_upload_user_column()
     ensure_upload_analysis_columns()
+    ensure_upload_ai_review_columns()
 
 
 def ensure_upload_user_column() -> None:
@@ -36,6 +37,20 @@ def ensure_upload_analysis_columns() -> None:
         ("anomalies_status", "ALTER TABLE uploads ADD COLUMN anomalies_status text DEFAULT 'pending' NOT NULL"),
         ("insights_error_message", "ALTER TABLE uploads ADD COLUMN insights_error_message text"),
         ("anomalies_error_message", "ALTER TABLE uploads ADD COLUMN anomalies_error_message text"),
+    ]
+
+    with db.engine.begin() as connection:
+        for column_name, statement in alterations:
+            if column_name not in upload_columns:
+                connection.execute(text(statement))
+
+
+def ensure_upload_ai_review_columns() -> None:
+    inspector = inspect(db.engine)
+    upload_columns = {column["name"] for column in inspector.get_columns("uploads")}
+    alterations = [
+        ("ai_review_status", "ALTER TABLE uploads ADD COLUMN ai_review_status text DEFAULT 'pending' NOT NULL"),
+        ("ai_review_error_message", "ALTER TABLE uploads ADD COLUMN ai_review_error_message text"),
     ]
 
     with db.engine.begin() as connection:
