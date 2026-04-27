@@ -5,7 +5,7 @@ SOC-style log analysis application for uploading proxy logs, parsing them into s
 ## 🚀 Live Demo
 
 The application is deployed and accessible live at:
-**[http://32.194.120.165/](http://32.194.120.165/)**
+**[http://log_analyzer.ruthura.com](http://log_analyzer.ruthura.com)**
 
 ---
 
@@ -303,4 +303,3 @@ Included example file:
 - [data/synthetic_zscaler_web.log](data/synthetic_zscaler_web.log)
 
 This file can be uploaded directly through the UI for testing the end-to-end flow.
-
