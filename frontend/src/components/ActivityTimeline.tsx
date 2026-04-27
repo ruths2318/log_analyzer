@@ -15,6 +15,8 @@ import {
 
 import type { LogEvent } from '../types'
 
+const TIMELINE_PALETTE = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#f97316']
+
 type ActivityTimelineProps = {
   events: LogEvent[]
   selectedBucketStart: string | null
@@ -63,7 +65,6 @@ export function ActivityTimeline({ events, selectedBucketStart, onBucketSelect }
   const [granularity, setGranularity] = useState<TimelineGranularity>('15m')
   const [view, setView] = useState<TimelineView>('bars')
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const palette = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#1d4ed8', '#0ea5e9']
   const stepMs = GRANULARITY_OPTIONS.find((option) => option.value === granularity)?.stepMs ?? 15 * 60_000
   const bucketsByLabel = new Map<string, TimelineBucket>()
 
@@ -160,10 +161,10 @@ export function ActivityTimeline({ events, selectedBucketStart, onBucketSelect }
                 <LineChart data={buckets} margin={{ top: 10, right: 10, bottom: 10, left: 0 }}>
                   <defs>
                     <linearGradient id="timelineLineGradient" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#1d4ed8" />
-                      <stop offset="33%" stopColor="#2563eb" />
-                      <stop offset="66%" stopColor="#3b82f6" />
-                      <stop offset="100%" stopColor="#60a5fa" />
+                      <stop offset="0%" stopColor="#3b82f6" />
+                      <stop offset="33%" stopColor="#06b6d4" />
+                      <stop offset="66%" stopColor="#10b981" />
+                      <stop offset="100%" stopColor="#f59e0b" />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="rgba(148, 163, 184, 0.14)" vertical={false} />
@@ -180,7 +181,9 @@ export function ActivityTimeline({ events, selectedBucketStart, onBucketSelect }
                     strokeWidth={2.5}
                     dot={{ r: 3, strokeWidth: 0, fill: '#f8fafc' }}
                     activeDot={{ r: 5, fill: '#93c5fd' }}
-                  />
+                  >
+                    <LabelList dataKey="count" position="top" fill="#f8fafc" fontSize={11} />
+                  </Line>
                 </LineChart>
               ) : (
                 <BarChart data={buckets} margin={{ top: 10, right: 10, bottom: 10, left: 0 }}>
@@ -198,7 +201,7 @@ export function ActivityTimeline({ events, selectedBucketStart, onBucketSelect }
                     {buckets.map((bucket) => (
                       <Cell
                         key={bucket.start}
-                        fill={selectedBucketStart === bucket.start ? '#93c5fd' : palette[buckets.indexOf(bucket) % palette.length]}
+                        fill={selectedBucketStart === bucket.start ? '#bfdbfe' : TIMELINE_PALETTE[buckets.indexOf(bucket) % TIMELINE_PALETTE.length]}
                       />
                     ))}
                     <LabelList dataKey="count" position="top" fill="#f8fafc" fontSize={11} />

@@ -15,6 +15,8 @@ import {
 } from 'recharts'
 import type { LogEvent } from '../types'
 
+const CHART_PALETTE = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316']
+
 type InsightWidget = {
   id: string
   field: PivotField
@@ -58,20 +60,27 @@ function PieWidget({
   onAddPivot: (field: PivotField, value: string) => void
   onRemovePivot: (field: PivotField, value: string) => void
 }) {
-  const palette = ['#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#0ea5e9', '#38bdf8', '#bfdbfe']
-
   return (
     <div className="pie-widget">
       <div className="pie-ring">
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={items} dataKey="value" nameKey="label" innerRadius={32} outerRadius={58} paddingAngle={2}>
+            <PieChart margin={{ top: 18, right: 28, bottom: 18, left: 28 }}>
+            <Pie
+              data={items}
+              dataKey="value"
+              nameKey="label"
+              innerRadius={32}
+              outerRadius={58}
+              paddingAngle={2}
+              labelLine={false}
+              label={(props) => renderPieLabel(props as unknown as Record<string, unknown>)}
+            >
               {items.map((item, index) => (
-                <Cell key={`pie-${item.label}`} fill={palette[index % palette.length]} />
+                <Cell key={`pie-${item.label}`} fill={CHART_PALETTE[index % CHART_PALETTE.length]} />
               ))}
             </Pie>
-            <Tooltip
-              contentStyle={{ background: '#0f172a', border: '1px solid rgba(63,131,248,0.25)', borderRadius: '10px' }}
+              <Tooltip
+                contentStyle={{ background: '#0f172a', border: '1px solid rgba(63,131,248,0.25)', borderRadius: '10px' }}
               labelStyle={{ color: '#bfdbfe' }}
             />
           </PieChart>
@@ -87,7 +96,7 @@ function PieWidget({
               type="button"
               onClick={() => (isActive ? onRemovePivot(field, item.label) : onAddPivot(field, item.label))}
             >
-              <span className="pie-swatch" style={{ background: palette[index % palette.length] }} />
+              <span className="pie-swatch" style={{ background: CHART_PALETTE[index % CHART_PALETTE.length] }} />
               <div className="pie-legend-copy">
                 <span className="overflow-slider">{item.label}</span>
                 <strong>{Math.round(item.share * 100)}% · {item.value} events</strong>
@@ -112,7 +121,6 @@ function InsightCard({
 }: InsightCardProps) {
   const items = buildDistribution(events, widget.field)
   const maxValue = items.reduce((current, item) => Math.max(current, item.value), 1)
-  const palette = ['#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#0ea5e9', '#38bdf8', '#bfdbfe']
 
   return (
     <article className="insight-card">
@@ -161,18 +169,29 @@ function InsightCard({
       ) : (
         <div className="insight-chart-shell">
           <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={items} layout="vertical" margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
+            <BarChart data={items} layout="vertical" margin={{ top: 4, right: 20, bottom: 4, left: 8 }}>
               <XAxis type="number" hide />
               <YAxis dataKey="label" type="category" hide />
               <Tooltip
                 contentStyle={{ background: '#0f172a', border: '1px solid rgba(63,131,248,0.25)', borderRadius: '10px' }}
                 labelStyle={{ color: '#bfdbfe' }}
               />
-              <Bar dataKey="value" radius={[0, 8, 8, 0]}>
+              <Bar dataKey="value" radius={[0, 8, 8, 0]} minPointSize={28}>
                 {items.map((item, index) => (
-                  <Cell key={`${widget.id}-bar-${item.label}`} fill={palette[index % palette.length]} />
+                  <Cell key={`${widget.id}-bar-${item.label}`} fill={CHART_PALETTE[index % CHART_PALETTE.length]} />
                 ))}
-                <LabelList content={(props) => renderInlineBarLabel(props as unknown as Record<string, unknown>)} />
+                <LabelList
+                  dataKey="label"
+                  position="insideLeft"
+                  offset={8}
+                  fill="#eff6ff"
+                  fontSize={11}
+                  fontWeight={600}
+                  formatter={(value) => {
+                    const text = String(value ?? '')
+                    return text.length > 24 ? `${text.slice(0, 22)}…` : text
+                  }}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -201,12 +220,12 @@ function InsightCard({
                     className="insight-bar"
                     style={{
                       width: `${(item.value / maxValue) * 100}%`,
-                      background: palette[items.indexOf(item) % palette.length],
+                      background: CHART_PALETTE[items.indexOf(item) % CHART_PALETTE.length],
                     }}
                   />
                 </div>
                 <div className="insight-meta">
-                  <span>{item.value} events</span>
+                  <span className="overflow-slider">{item.label}</span>
                   <span>{isActive ? 'Pivot active' : 'Add condition'}</span>
                 </div>
               </button>
@@ -294,22 +313,34 @@ export function EventInsights({
   )
 }
 
-function renderInlineBarLabel(props: Record<string, unknown>) {
-  const value = props.value ?? ''
-  const payload = (props.payload ?? {}) as { label?: string }
-  const x = Number(props.x ?? 0)
-  const y = Number(props.y ?? 0)
-  const width = Number(props.width ?? 0)
-  const height = Number(props.height ?? 0)
-  const label = payload?.label ?? ''
-  const text = `${label} · ${value}`
-  const fitsInside = width >= Math.max(120, text.length * 6.2)
-  const textX = fitsInside ? x + width - 8 : x + width + 8
-  const anchor = fitsInside ? 'end' : 'start'
-  const fill = fitsInside ? '#eff6ff' : '#cbd5e1'
+function renderPieLabel(props: Record<string, unknown>) {
+  const cx = Number(props.cx ?? 0)
+  const cy = Number(props.cy ?? 0)
+  const midAngle = Number(props.midAngle ?? 0)
+  const innerRadius = Number(props.innerRadius ?? 0)
+  const outerRadius = Number(props.outerRadius ?? 0)
+  const percent = Number(props.percent ?? 0)
+  if (percent < 0.08) {
+    return null
+  }
+
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.55
+  const radians = (-midAngle * Math.PI) / 180
+  const x = cx + radius * Math.cos(radians)
+  const y = cy + radius * Math.sin(radians)
+  const text = `${Math.round(percent * 100)}%`
 
   return (
-    <text x={textX} y={y + height / 2 + 4} fill={fill} fontSize={11} textAnchor={anchor}>
+    <text
+      x={x}
+      y={y}
+      fill="#dbeafe"
+      fontSize={10}
+      fontWeight={600}
+      textAnchor="middle"
+      dominantBaseline="central"
+      style={{ paintOrder: 'stroke', stroke: '#08111d', strokeWidth: 3, pointerEvents: 'none' }}
+    >
       {text}
     </text>
   )
