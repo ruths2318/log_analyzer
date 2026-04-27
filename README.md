@@ -2,6 +2,13 @@
 
 SOC-style log analysis application for uploading proxy logs, parsing them into structured events, surfacing analyst-friendly insights, and generating anomaly-driven investigation views.
 
+## 🚀 Live Demo
+
+The application is deployed and accessible live at:
+**[http://32.194.120.165/](http://32.194.120.165/)**
+
+---
+
 ## What This Project Does
 
 This application lets a user:
@@ -35,19 +42,19 @@ The current implementation is built around Zscaler web proxy style logs. A sampl
 
 ### Option 1: Docker Compose
 
-This is the easiest way to run the full stack locally.
+This is the easiest way to run the full stack locally or on an EC2 instance.
 
 1. Make sure Docker and Docker Compose are installed.
-2. Update [backend/.env](/home/rmeedima/log_analyzer/backend/.env) with your desired values.
+2. Update [backend/.env](/home/rmeedima/log_analyzer/backend/.env) with your desired values (including your `OPENAI_API_KEY`).
 3. Start the stack:
 
 ```bash
-docker compose up --build
+sudo docker compose up --build
 ```
 
 Services:
 
-- Frontend: `http://localhost:3000`
+- Frontend: `http://localhost:80`
 - Backend API: `http://localhost:5000`
 - PostgreSQL: `localhost:5432`
 
